@@ -11,10 +11,29 @@ SOURCE_CFS_CURRENT_INCIDENTS = "cfs_current_incidents"
 CFS_INCIDENTS_URL = (
     "https://data.eso.sa.gov.au/prod/cfs/criimson/cfs_current_incidents.json"
 )
-CFS_REQUEST_TIMEOUT_SECONDS = 30
 
-# Timezone for CFS Date/Time fields (South Australia).
-CFS_TIMEZONE = "Australia/Adelaide"
+# MFS source configuration.
+AGENCY_MFS = "MFS"
+SOURCE_MFS_CURRENT_INCIDENTS = "mfs_current_incidents"
+MFS_INCIDENTS_URL = (
+    "https://cfs.geohub.sa.gov.au/server/rest/services/"
+    "CFS_Incident_Read/MFS_Incidents/FeatureServer/0/query"
+)
+MFS_OUT_FIELDS = (
+    "id,incident_name,name,first_report,status,region,aircraft,long,lat,event"
+)
+MFS_QUERY_PARAMS = {
+    "where": "1=1",
+    "outFields": MFS_OUT_FIELDS,
+    "returnGeometry": "false",
+    "f": "json",
+}
+
+REQUEST_TIMEOUT_SECONDS = 30
+
+# Timezone for CFS Date/Time and MFS first_report strings (South Australia).
+SA_TIMEZONE = "Australia/Adelaide"
+CFS_TIMEZONE = SA_TIMEZONE
 
 # Planned V1 defaults (used when options flow is implemented).
 DEFAULT_LOCAL_RADIUS_KM = 25

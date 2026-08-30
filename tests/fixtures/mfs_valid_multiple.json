@@ -1,0 +1,32 @@
+{
+  "features": [
+    {
+      "attributes": {
+        "id": 100001,
+        "incident_name": "ADELAIDE",
+        "name": "LIGHT SQUARE, ADELAIDE",
+        "first_report": "Sunday, 30 Aug 2026 17:59:00",
+        "status": "COMPLETE",
+        "region": "MFS",
+        "aircraft": 0,
+        "long": 138.59267978,
+        "lat": -34.92590949,
+        "event": "Fire Alarm"
+      }
+    },
+    {
+      "attributes": {
+        "id": 100002,
+        "incident_name": "SEAFORD RISE",
+        "name": "BARBADOS DRIVE, SEAFORD RISE",
+        "first_report": "Sunday, 30 Aug 2026 17:35:00",
+        "status": "GOING",
+        "region": "MFS",
+        "aircraft": null,
+        "long": 138.48982326,
+        "lat": -35.19900992,
+        "event": "Building Fire"
+      }
+    }
+  ]
+}

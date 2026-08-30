@@ -1,0 +1,28 @@
+{
+  "features": [
+    {
+      "attributes": {
+        "id": 200001,
+        "incident_name": "NORTH HAVEN",
+        "name": "ONE AND ALL DRIVE, NORTH HAVEN",
+        "first_report": "Sunday, 30 Aug 2026 18:10:00",
+        "status": "GOING",
+        "region": "MFS",
+        "aircraft": 0,
+        "long": 138.48772641,
+        "lat": -34.7938148,
+        "event": "Assist Agency"
+      }
+    },
+    "bad-entry",
+    {
+      "geometry": {}
+    },
+    {
+      "attributes": {
+        "status": "GOING",
+        "event": "Other"
+      }
+    }
+  ]
+}

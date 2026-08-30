@@ -10,12 +10,14 @@ This document describes the **planned V1 architecture and behaviour**. Implement
 
 | Area | Status |
 | --- | --- |
-| Integration discovery and manifest | Implemented |
-| Config Flow (single instance, HA location) | Implemented |
+| Integration discovery and manifest | Implemented (Milestone 1) |
+| Config Flow (single instance, HA location) | Implemented (Milestone 1) |
 | CFS current incidents API client | Implemented (Milestone 2) |
 | CFS normalization to `Incident` model | Implemented (Milestone 2) |
-| Temporary development status sensor | Implemented (Milestone 2) |
-| MFS API client | Not implemented |
+| MFS current incidents API client | Implemented (Milestone 3) |
+| MFS normalization to `Incident` model | Implemented (Milestone 3) |
+| Multi-source coordinator with partial failure handling | Implemented (Milestone 3) |
+| Temporary development status sensor | Implemented (Milestone 3) |
 | Distance, bearing, relevance | Not implemented |
 | Planned stable V1 sensors | Not implemented |
 | Options Flow | Not implemented |
@@ -27,6 +29,18 @@ This document describes the **planned V1 architecture and behaviour**. Implement
 * Incidents without usable coordinates are **retained** with `latitude=None` and `longitude=None` rather than rejected, so later geography processing can treat them as non-spatial.
 * Geography fields (`distance_km`, `bearing_degrees`, `bearing_cardinal`, `relevance`) remain unset (`None`) until Milestone 4.
 * The temporary `sensor.sa_emergency_status` entity is a development aid only and is not part of the final V1 entity contract.
+
+### Milestone 3 implementation notes
+
+* MFS uses an explicit ArcGIS query against the official MFS FeatureServer layer with `where=1=1`, explicit `outFields`, `returnGeometry=false`, and `f=json`.
+* Live MFS `first_report` values are human-readable local datetime strings such as `Sunday, 30 Aug 2026 18:19:00`, parsed in `Australia/Adelaide`. Epoch-millisecond values are also accepted if encountered.
+* MFS field mapping decision:
+  * `name` → `location_name` (street address, e.g. `ANGLE VALE ROAD, EVANSTON GARDENS`)
+  * `incident_name` → `message` when it differs from `name` (shorter area label, e.g. `EVANSTON GARDENS`)
+  * if `name` is absent, `incident_name` is used as `location_name`
+* MFS-only fields such as `resources`, `fire_ban_district`, `level`, and `message_url` remain `None`.
+* Coordinator partial failure behaviour: one agency source may fail while the other succeeds; overall update fails only when both sources fail.
+* `Incident.source` must be supplied explicitly by each normalizer; there is no CFS default on the model.
 
 The core V1 objective remains:
 

@@ -15,7 +15,7 @@ from .const import (
     NAME,
     SCAFFOLD_SENSOR_KEY,
     SOURCE_CFS_CURRENT_INCIDENTS,
-    SOURCE_STATUS_OK,
+    SOURCE_MFS_CURRENT_INCIDENTS,
 )
 from .coordinator import SaEmergencyConfigEntry, SaEmergencyDataUpdateCoordinator
 
@@ -34,7 +34,7 @@ async def async_setup_entry(
 class SaEmergencyDevelopmentSensor(
     CoordinatorEntity[SaEmergencyDataUpdateCoordinator], SensorEntity
 ):
-    """Temporary development sensor for Milestone 2.
+    """Temporary development sensor for Milestone 3.
 
     This entity is not part of the final V1 sensor contract documented in
     docs/V1_SPEC.md and may change or be removed before release.
@@ -56,12 +56,12 @@ class SaEmergencyDevelopmentSensor(
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)},
             "name": NAME,
-            "manufacturer": "AgriAutomation",
+            "manufacturer": "Mark Jones",
         }
 
     @property
     def native_value(self) -> int:
-        """Return the normalized CFS incident count."""
+        """Return the total normalized incident count across all sources."""
         return len(self.coordinator.data.incidents)
 
     @property
@@ -69,20 +69,22 @@ class SaEmergencyDevelopmentSensor(
         """Return development diagnostics."""
         data = self.coordinator.data
         cfs_status = data.source_status.get(SOURCE_CFS_CURRENT_INCIDENTS)
-        sample = [
-            incident.as_dict()
-            for incident in data.incidents[:DEV_SENSOR_INCIDENT_SAMPLE_LIMIT]
-        ]
+        mfs_status = data.source_status.get(SOURCE_MFS_CURRENT_INCIDENTS)
+
+        sample: list[dict[str, Any]] = []
+        for incident in data.incidents[:DEV_SENSOR_INCIDENT_SAMPLE_LIMIT]:
+            sample.append(incident.as_dict())
 
         attributes: dict[str, Any] = {
             "development_sensor": True,
-            "source": "CFS",
-            "source_status": cfs_status.status if cfs_status else SOURCE_STATUS_OK,
-            "raw_incident_count": cfs_status.raw_count if cfs_status else 0,
-            "normalized_incident_count": len(data.incidents),
-            "skipped_record_count": cfs_status.skipped_count if cfs_status else 0,
+            "total_normalized_incidents": len(data.incidents),
             "incident_sample": sample,
         }
+
+        if cfs_status is not None:
+            attributes["cfs"] = cfs_status.as_dict()
+        if mfs_status is not None:
+            attributes["mfs"] = mfs_status.as_dict()
 
         if data.last_successful_update is not None:
             attributes["last_successful_update"] = (

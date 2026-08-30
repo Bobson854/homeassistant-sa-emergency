@@ -1,0 +1,43 @@
+{
+  "features": [
+    {
+      "attributes": {
+        "id": 300001,
+        "name": "VALID STREET, ADELAIDE",
+        "first_report": "Sunday, 30 Aug 2026 10:00:00",
+        "status": "GOING",
+        "region": "MFS",
+        "aircraft": "2",
+        "long": "138.6",
+        "lat": "-34.9",
+        "event": "Other"
+      }
+    },
+    {
+      "attributes": {
+        "id": 300002,
+        "incident_name": "NO COORDS",
+        "first_report": "not-a-date",
+        "status": "GOING",
+        "region": "MFS",
+        "aircraft": "bad",
+        "long": "",
+        "lat": null,
+        "event": "Other"
+      }
+    },
+    {
+      "attributes": {
+        "id": 300003,
+        "name": "INVALID COORDS",
+        "first_report": "Sunday, 30 Aug 2026 11:00:00",
+        "status": "GOING",
+        "region": "MFS",
+        "aircraft": 0,
+        "long": 200.0,
+        "lat": 95.0,
+        "event": "Other"
+      }
+    }
+  ]
+}

@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Any
 
-from .const import SOURCE_CFS_CURRENT_INCIDENTS
+from .const import AGENCY_CFS, AGENCY_MFS
 
 
 @dataclass(slots=True)
@@ -15,6 +15,7 @@ class Incident:
 
     incident_id: str
     agency: str
+    source: str
     incident_type: str | None
     status: str | None
     level: str | None
@@ -32,7 +33,6 @@ class Incident:
     bearing_degrees: float | None = None
     bearing_cardinal: str | None = None
     relevance: str | None = None
-    source: str = SOURCE_CFS_CURRENT_INCIDENTS
 
     def as_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable representation for sensor attributes."""
@@ -68,4 +68,13 @@ class SaEmergencyData:
     @property
     def cfs_incidents(self) -> list[Incident]:
         """Return normalized CFS incidents."""
-        return self.incidents
+        return [
+            incident for incident in self.incidents if incident.agency == AGENCY_CFS
+        ]
+
+    @property
+    def mfs_incidents(self) -> list[Incident]:
+        """Return normalized MFS incidents."""
+        return [
+            incident for incident in self.incidents if incident.agency == AGENCY_MFS
+        ]
