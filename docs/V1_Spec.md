@@ -4,6 +4,28 @@ Repository: `homeassistant-sa-emergency`
 Integration domain: `sa_emergency`
 Display name: `SA Emergency`
 
+## Implementation status (Milestone 1 scaffold)
+
+This document describes the **planned V1 architecture and behaviour**. Only the Milestone 1 scaffold is implemented in the repository today.
+
+| Area | Status |
+| --- | --- |
+| Integration discovery and manifest | Implemented |
+| Config Flow (single instance, HA location) | Implemented |
+| DataUpdateCoordinator skeleton | Implemented (no HTTP, no incidents) |
+| Temporary scaffold status sensor | Implemented |
+| CFS/MFS API clients | Not implemented |
+| Normalization, geo, relevance | Not implemented |
+| Planned stable V1 sensors | Not implemented |
+| Options Flow | Not implemented |
+| HACS release | Not yet published |
+
+The core V1 objective remains:
+
+> What current official CFS or MFS incidents are relevant to my Home Assistant location?
+
+---
+
 ## 1. Purpose
 
 `SA Emergency` is a Home Assistant custom integration providing location-aware South Australian emergency incident information from authoritative public CFS and MFS data sources.

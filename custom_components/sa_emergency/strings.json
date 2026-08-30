@@ -1,0 +1,23 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "SA Emergency",
+        "description": "SA Emergency uses your Home Assistant configured location as the reference point for distance and relevance calculations.\n\nConfigured location: {latitude}, {longitude}\n\nNo incident polling is available in this scaffold release."
+      }
+    },
+    "error": {
+      "location_not_configured": "Configure Home Assistant latitude and longitude before setting up SA Emergency."
+    },
+    "abort": {
+      "already_configured": "SA Emergency is already configured."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "name": "Status"
+      }
+    }
+  }
+}

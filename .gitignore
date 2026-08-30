@@ -1,0 +1,95 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+*.whl
+
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+
+# Linting / type checking
+.mypy_cache/
+.ruff_cache/
+.dmypy.json
+dmypy.json
+
+# Editors — ignore local-only settings, keep shared repo config
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+.idea/
+*.swp
+*.swo
+*~
+
+# Cursor (local workspace state only)
+.cursor/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# Home Assistant local runtime data (never commit)
+.storage/
+secrets.yaml
+secrets/
+*.db
+*.db-shm
+*.db-wal
+home-assistant.log
+home-assistant.log.*
+*.log
+blueprints/
+deps/
+tts/
+www/community/
+.HA_VERSION
+
+# Local HA configuration trees (common dev layouts)
+config/.storage/
+config/secrets.yaml
+config/home-assistant_v2.db
+config/home-assistant.log*
+
+# Credentials and environment files
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+credentials.json
+service_account.json
+
+# Backups and temporary files
+*.bak
+*.tmp
+*.temp
+*.orig
+
+# Node (if used for ancillary tooling)
+node_modules/
