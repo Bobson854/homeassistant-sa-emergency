@@ -46,7 +46,7 @@ class SaEmergencyScaffoldSensor(
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)},
             "name": NAME,
-            "manufacturer": "AgriAutomation",
+            "manufacturer": "Mark Jones",
         }
 
     @property

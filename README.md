@@ -51,7 +51,7 @@ This repository is not yet published for HACS default installation. A GitHub rel
 
 After the first tagged release:
 
-1. Add `https://github.com/AgriAutomation/homeassistant-sa-emergency` as a custom HACS repository (category: Integration).
+1. Add `https://github.com/Bobson854/homeassistant-sa-emergency` as a custom HACS repository (category: Integration).
 2. Install **SA Emergency** from HACS.
 3. Restart Home Assistant and complete the UI setup.
 
