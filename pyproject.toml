@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "homeassistant-sa-emergency"
-version = "0.5.0"
+version = "0.6.0"
 description = "Home Assistant custom integration for South Australian emergency incident information"
 readme = "README.md"
 license = { text = "MIT" }
@@ -69,7 +69,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "custom_components/**" = ["TC001", "TC002", "TC003"]
-"tests/**" = ["S101", "PLR2004"]
+"tests/**" = ["S101", "PLR2004", "TC002"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["custom_components"]

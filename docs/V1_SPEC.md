@@ -23,7 +23,10 @@ This document describes the **planned V1 architecture and behaviour**. Implement
 | Options Flow (radii, polling, agency toggles) | Implemented (Milestone 5) |
 | Stable V1 sensor suite | Implemented (Milestone 5) |
 | Structured relevant incident attributes | Implemented (Milestone 5) |
-| HACS release | Not yet published |
+| Diagnostics | Implemented (Milestone 6) |
+| HACS custom-repository release readiness | Implemented (Milestone 6) |
+| CFS public warnings | Not implemented |
+| Default HACS catalogue submission | Not yet submitted |
 
 ### Milestone 2 implementation notes
 
@@ -64,6 +67,14 @@ This document describes the **planned V1 architecture and behaviour**. Implement
 * When an agency is disabled through options, its sensor remains registered with unknown state and `enabled = false`.
 * Public incident attributes omit unavailable fields rather than fabricating placeholder values. Internal field names are mapped to the stable public schema (`type`, `location`, `bearing`, `aircraft`).
 * The temporary `sensor.sa_emergency_status` development entity has been removed.
+
+### Milestone 6 implementation notes
+
+* V1 is the **incident-awareness foundation** only. Warning feeds, warning polygons, significant/warning relevance, aviation enrichment, and notifications remain post-V1 scope.
+* Config-entry diagnostics expose aggregated runtime and source health data only. Home Assistant home coordinates and raw source payloads are excluded.
+* Custom-integration localization uses `translations/en.json` directly; Core `strings.json` generation is not required.
+* HACS custom-repository trial installation is supported after a real GitHub Release is published.
+* Default HACS catalogue inclusion requires additional external steps such as Home Assistant Brands registration and a `hacs/default` submission PR.
 
 The core V1 objective remains:
 
