@@ -4,21 +4,29 @@ Repository: `homeassistant-sa-emergency`
 Integration domain: `sa_emergency`
 Display name: `SA Emergency`
 
-## Implementation status (Milestone 1 scaffold)
+## Implementation status
 
-This document describes the **planned V1 architecture and behaviour**. Only the Milestone 1 scaffold is implemented in the repository today.
+This document describes the **planned V1 architecture and behaviour**. Implementation progress by milestone:
 
 | Area | Status |
 | --- | --- |
 | Integration discovery and manifest | Implemented |
 | Config Flow (single instance, HA location) | Implemented |
-| DataUpdateCoordinator skeleton | Implemented (no HTTP, no incidents) |
-| Temporary scaffold status sensor | Implemented |
-| CFS/MFS API clients | Not implemented |
-| Normalization, geo, relevance | Not implemented |
+| CFS current incidents API client | Implemented (Milestone 2) |
+| CFS normalization to `Incident` model | Implemented (Milestone 2) |
+| Temporary development status sensor | Implemented (Milestone 2) |
+| MFS API client | Not implemented |
+| Distance, bearing, relevance | Not implemented |
 | Planned stable V1 sensors | Not implemented |
 | Options Flow | Not implemented |
 | HACS release | Not yet published |
+
+### Milestone 2 implementation notes
+
+* CFS `Location` values are parsed as `"latitude,longitude"` comma-separated decimal degrees (verified against the live feed).
+* Incidents without usable coordinates are **retained** with `latitude=None` and `longitude=None` rather than rejected, so later geography processing can treat them as non-spatial.
+* Geography fields (`distance_km`, `bearing_degrees`, `bearing_cardinal`, `relevance`) remain unset (`None`) until Milestone 4.
+* The temporary `sensor.sa_emergency_status` entity is a development aid only and is not part of the final V1 entity contract.
 
 The core V1 objective remains:
 

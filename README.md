@@ -21,9 +21,13 @@ Planned authoritative sources include:
 
 ## Status
 
-Milestone 1 scaffold only. The integration can be discovered, configured through the UI, and loads a temporary diagnostic sensor. **No CFS or MFS incident data is fetched yet.**
+Milestone 2 — **CFS incident ingestion implemented**.
 
-Current version: `0.1.0`
+The integration polls the official CFS current incidents JSON feed, normalizes records into an internal `Incident` model, and exposes a temporary development sensor (`sensor.sa_emergency_status`) showing the normalized CFS incident count and source health.
+
+**Not yet implemented:** MFS ingestion, distance/bearing calculations, local/regional relevance, Options Flow, and the final stable V1 sensor suite. Current sensor(s) are development interfaces and may change before V1.
+
+Current version: `0.2.0`
 
 ## Planned features
 
@@ -79,12 +83,10 @@ python -m script.hassfest --action validate --integration-path custom_components
 
 ## Data sources
 
-Planned V1 sources (not yet implemented):
-
-| Agency | Source |
-| --- | --- |
-| CFS incidents | `https://data.eso.sa.gov.au/prod/cfs/criimson/cfs_current_incidents.json` |
-| MFS incidents | `https://cfs.geohub.sa.gov.au/server/rest/services/CFS_Incident_Read/MFS_Incidents/FeatureServer/0/query` |
+| Agency | Source | Status |
+| --- | --- | --- |
+| CFS incidents | `https://data.eso.sa.gov.au/prod/cfs/criimson/cfs_current_incidents.json` | Implemented (Milestone 2) |
+| MFS incidents | `https://cfs.geohub.sa.gov.au/server/rest/services/CFS_Incident_Read/MFS_Incidents/FeatureServer/0/query` | Planned |
 
 These are public endpoints and do not require API credentials for V1.
 

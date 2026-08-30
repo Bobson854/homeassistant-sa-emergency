@@ -1,0 +1,32 @@
+[
+  {
+    "IncidentNo": "555501",
+    "Date": "30/08/2026",
+    "Time": "11:00",
+    "Type": "Burn Off",
+    "Status": "CONTROLLED",
+    "Resources": 0,
+    "Aircraft": 0,
+    "Location": "-34.0,138.0"
+  },
+  {
+    "IncidentNo": "555502",
+    "Date": "30/08/2026",
+    "Time": "11:05",
+    "Type": "Burn Off",
+    "Status": "CONTROLLED",
+    "Resources": "4",
+    "Aircraft": " 2 ",
+    "Location": "-34.1,138.1"
+  },
+  {
+    "IncidentNo": "555503",
+    "Date": "30/08/2026",
+    "Time": "11:10",
+    "Type": "Burn Off",
+    "Status": "CONTROLLED",
+    "Resources": "bad",
+    "Aircraft": null,
+    "Location": "-34.2,138.2"
+  }
+]

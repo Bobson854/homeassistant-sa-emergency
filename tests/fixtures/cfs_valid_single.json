@@ -1,0 +1,18 @@
+[
+  {
+    "IncidentNo": "123456",
+    "Date": "30/08/2026",
+    "Time": "14:30",
+    "Message": "Smoke visible in area",
+    "Message_link": "https://example.test/incident/123456",
+    "Location_name": "MONARTO, OLD PRINCES HIGHWAY",
+    "Region": "2",
+    "Type": "Grass Fire",
+    "Status": "GOING",
+    "Level": 2,
+    "FBD": "MURRAYlands",
+    "Resources": 4,
+    "Aircraft": 1,
+    "Location": "-35.1234,139.5678"
+  }
+]

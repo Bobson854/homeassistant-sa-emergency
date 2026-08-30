@@ -1,0 +1,42 @@
+[
+  {
+    "IncidentNo": "666601",
+    "Date": "30/08/2026",
+    "Time": "12:00",
+    "Type": "Grass Fire",
+    "Status": "GOING",
+    "Location": "-35.5,139.5"
+  },
+  {
+    "IncidentNo": "666602",
+    "Date": "30/08/2026",
+    "Time": "12:05",
+    "Type": "Grass Fire",
+    "Status": "GOING",
+    "Location": ""
+  },
+  {
+    "IncidentNo": "666603",
+    "Date": "30/08/2026",
+    "Time": "12:10",
+    "Type": "Grass Fire",
+    "Status": "GOING",
+    "Location": "not-a-coordinate"
+  },
+  {
+    "IncidentNo": "666604",
+    "Date": "30/08/2026",
+    "Time": "12:15",
+    "Type": "Grass Fire",
+    "Status": "GOING",
+    "Location": "95.0,138.0"
+  },
+  {
+    "IncidentNo": "666605",
+    "Date": "30/08/2026",
+    "Time": "12:20",
+    "Type": "Grass Fire",
+    "Status": "GOING",
+    "Location": "-35.0,200.0"
+  }
+]

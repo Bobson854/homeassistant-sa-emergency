@@ -1,0 +1,18 @@
+[
+  {
+    "IncidentNo": "777701",
+    "Date": "30/08/2026",
+    "Time": "13:00",
+    "Type": "Other",
+    "Status": "MONITORING",
+    "Location": "-34.0,138.0"
+  },
+  {
+    "IncidentNo": "777702",
+    "Date": "not-a-date",
+    "Time": "99:99",
+    "Type": "Other",
+    "Status": "MONITORING",
+    "Location": "-34.1,138.1"
+  }
+]

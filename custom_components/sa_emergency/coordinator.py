@@ -3,27 +3,29 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .const import DEFAULT_SCAN_INTERVAL, DOMAIN
+from .api import SaEmergencyApi, SaEmergencyApiError
+from .const import (
+    DEFAULT_SCAN_INTERVAL,
+    DOMAIN,
+    SOURCE_CFS_CURRENT_INCIDENTS,
+    SOURCE_STATUS_OK,
+)
+from .models import Incident, SaEmergencyData, SourceStatus
+from .normalizer import normalize_cfs_incident
 
 _LOGGER = logging.getLogger(__name__)
 
 type SaEmergencyConfigEntry = ConfigEntry[None]
 
 
-class SaEmergencyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
-    """Coordinate SA Emergency data updates.
-
-    Milestone 1 scaffold only — no external API calls or incident records yet.
-    Later milestones will fetch CFS/MFS feeds, normalize incidents, and compute
-    geographic relevance before exposing stable Home Assistant entities.
-    """
+class SaEmergencyDataUpdateCoordinator(DataUpdateCoordinator[SaEmergencyData]):
+    """Coordinate SA Emergency data updates."""
 
     config_entry: SaEmergencyConfigEntry
 
@@ -40,27 +42,44 @@ class SaEmergencyDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             config_entry=config_entry,
             update_interval=DEFAULT_SCAN_INTERVAL,
         )
+        self.api = SaEmergencyApi(hass)
 
-    async def _async_update_data(self) -> dict[str, Any]:
-        """Return scaffold coordinator state.
+    async def _async_update_data(self) -> SaEmergencyData:
+        """Fetch and normalize CFS incidents."""
+        try:
+            raw_records = await self.api.async_get_cfs_incidents()
+        except SaEmergencyApiError as err:
+            raise UpdateFailed(f"CFS feed unavailable: {err}") from err
 
-        Does not perform HTTP requests or fabricate incident data.
-        """
-        if self.hass.config.latitude is None or self.hass.config.longitude is None:
-            raise UpdateFailed(
-                "Home Assistant location is not configured; set latitude and "
-                "longitude in Settings → System → General."
+        incidents: list[Incident] = []
+        skipped_count = 0
+
+        for record in raw_records:
+            incident = normalize_cfs_incident(record)
+            if incident is None:
+                skipped_count += 1
+                continue
+            incidents.append(incident)
+
+        _LOGGER.debug(
+            "CFS records fetched: %s, incidents normalized: %s, records skipped: %s",
+            len(raw_records),
+            len(incidents),
+            skipped_count,
+        )
+
+        now = dt_util.utcnow()
+        source_status = {
+            SOURCE_CFS_CURRENT_INCIDENTS: SourceStatus(
+                status=SOURCE_STATUS_OK,
+                raw_count=len(raw_records),
+                normalized_count=len(incidents),
+                skipped_count=skipped_count,
             )
-
-        return {
-            "scaffold": True,
-            "status": "scaffold",
-            "message": (
-                "SA Emergency scaffold is active. Incident polling is not "
-                "implemented yet."
-            ),
-            "reference_latitude": self.hass.config.latitude,
-            "reference_longitude": self.hass.config.longitude,
-            "last_checked": dt_util.utcnow().isoformat(),
-            "incidents": [],
         }
+
+        return SaEmergencyData(
+            incidents=incidents,
+            source_status=source_status,
+            last_successful_update=now,
+        )
