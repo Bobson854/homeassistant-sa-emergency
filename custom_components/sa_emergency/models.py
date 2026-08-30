@@ -51,6 +51,7 @@ class SourceStatus:
     normalized_count: int = 0
     skipped_count: int = 0
     error: str | None = None
+    enabled: bool = True
 
     def as_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable representation."""
@@ -87,6 +88,24 @@ class SaEmergencyData:
         """Return normalized MFS incidents."""
         return [
             incident for incident in self.incidents_all if incident.agency == AGENCY_MFS
+        ]
+
+    @property
+    def cfs_relevant_incidents(self) -> list[Incident]:
+        """Return relevant CFS incidents only."""
+        return [
+            incident
+            for incident in self.incidents_relevant
+            if incident.agency == AGENCY_CFS
+        ]
+
+    @property
+    def mfs_relevant_incidents(self) -> list[Incident]:
+        """Return relevant MFS incidents only."""
+        return [
+            incident
+            for incident in self.incidents_relevant
+            if incident.agency == AGENCY_MFS
         ]
 
     @property

@@ -13,18 +13,17 @@ from homeassistant.util import dt as dt_util
 
 from .api import SaEmergencyApi, SaEmergencyApiError
 from .const import (
-    DEFAULT_LOCAL_RADIUS_KM,
-    DEFAULT_REGIONAL_RADIUS_KM,
-    DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     SOURCE_CFS_CURRENT_INCIDENTS,
     SOURCE_MFS_CURRENT_INCIDENTS,
+    SOURCE_STATUS_DISABLED,
     SOURCE_STATUS_ERROR,
     SOURCE_STATUS_OK,
 )
 from .geography import build_geographic_data, get_home_coordinates
 from .models import Incident, SaEmergencyData, SourceStatus
 from .normalizer import normalize_cfs_incident, normalize_mfs_incident
+from .options import get_integration_options
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -42,34 +41,55 @@ class SaEmergencyDataUpdateCoordinator(DataUpdateCoordinator[SaEmergencyData]):
         config_entry: SaEmergencyConfigEntry,
     ) -> None:
         """Initialize the coordinator."""
+        self.options = get_integration_options(config_entry)
         super().__init__(
             hass,
             logger=_LOGGER,
             name=DOMAIN,
             config_entry=config_entry,
-            update_interval=DEFAULT_SCAN_INTERVAL,
+            update_interval=self.options.scan_interval,
         )
         self.api = SaEmergencyApi(hass)
 
     async def _async_update_data(self) -> SaEmergencyData:
-        """Fetch, normalize, and enrich CFS and MFS incidents."""
-        cfs_incidents, cfs_status = await self._async_fetch_source(
-            SOURCE_CFS_CURRENT_INCIDENTS,
-            self.api.async_get_cfs_incidents,
-            normalize_cfs_incident,
-        )
-        mfs_incidents, mfs_status = await self._async_fetch_source(
-            SOURCE_MFS_CURRENT_INCIDENTS,
-            self.api.async_get_mfs_incidents,
-            normalize_mfs_incident,
-        )
+        """Fetch, normalize, and enrich enabled incident sources."""
+        cfs_incidents: list[Incident] = []
+        mfs_incidents: list[Incident] = []
 
-        if (
-            cfs_status.status == SOURCE_STATUS_ERROR
-            and mfs_status.status == SOURCE_STATUS_ERROR
+        if self.options.include_cfs:
+            cfs_incidents, cfs_status = await self._async_fetch_source(
+                SOURCE_CFS_CURRENT_INCIDENTS,
+                self.api.async_get_cfs_incidents,
+                normalize_cfs_incident,
+            )
+        else:
+            cfs_status = SourceStatus(
+                status=SOURCE_STATUS_DISABLED,
+                enabled=False,
+            )
+
+        if self.options.include_mfs:
+            mfs_incidents, mfs_status = await self._async_fetch_source(
+                SOURCE_MFS_CURRENT_INCIDENTS,
+                self.api.async_get_mfs_incidents,
+                normalize_mfs_incident,
+            )
+        else:
+            mfs_status = SourceStatus(
+                status=SOURCE_STATUS_DISABLED,
+                enabled=False,
+            )
+
+        enabled_statuses = [
+            status
+            for status in (cfs_status, mfs_status)
+            if status.enabled and status.status != SOURCE_STATUS_DISABLED
+        ]
+        if enabled_statuses and all(
+            status.status == SOURCE_STATUS_ERROR for status in enabled_statuses
         ):
             raise UpdateFailed(
-                "No current incident data available from CFS or MFS sources"
+                "No current incident data available from enabled incident sources"
             )
 
         home_lat, home_lon = get_home_coordinates(self.hass)
@@ -78,16 +98,16 @@ class SaEmergencyDataUpdateCoordinator(DataUpdateCoordinator[SaEmergencyData]):
             merged_incidents,
             home_lat,
             home_lon,
-            local_radius_km=DEFAULT_LOCAL_RADIUS_KM,
-            regional_radius_km=DEFAULT_REGIONAL_RADIUS_KM,
+            local_radius_km=self.options.local_radius_km,
+            regional_radius_km=self.options.regional_radius_km,
         )
 
-        last_successful_update = None
-        if (
-            cfs_status.status == SOURCE_STATUS_OK
-            or mfs_status.status == SOURCE_STATUS_OK
-        ):
-            last_successful_update = dt_util.utcnow()
+        successful_enabled_sources = [
+            status for status in enabled_statuses if status.status == SOURCE_STATUS_OK
+        ]
+        last_successful_update = (
+            dt_util.utcnow() if successful_enabled_sources else None
+        )
 
         data.source_status = {
             SOURCE_CFS_CURRENT_INCIDENTS: cfs_status,

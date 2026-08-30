@@ -21,13 +21,47 @@ Planned authoritative sources include:
 
 ## Status
 
-Milestone 4 — **geography and relevance classification implemented**.
+Milestone 5 — **V1 sensors and configurable options implemented**.
 
-The integration polls the official CFS JSON feed and the official MFS ArcGIS incident layer, normalizes both into a shared internal `Incident` model, and merges them in the coordinator. Distance, bearing, and local/regional relevance are calculated from the configured Home Assistant location using default radii of 25 km (local) and 100 km (regional). Partial source failure is tolerated: if one agency feed fails, valid data from the other is retained and still undergoes geographic processing.
+The integration polls official CFS and MFS incident feeds, normalizes them into a shared model, and calculates distance, bearing, and local/regional relevance from your configured Home Assistant location. Options allow you to configure local and regional radii, polling interval, and whether each agency feed is enabled. Partial source failure is tolerated when multiple sources are enabled.
 
-**Not yet implemented:** configurable radius Options Flow, the final stable V1 sensor suite, CFS public warnings, aviation/context enrichment, or warning-polygon relevance. The current `sensor.sa_emergency_status` entity is a temporary development interface and may change before V1.
+**Not yet implemented:** CFS public warnings, warning polygons, aviation/context enrichment, or a tagged public release. See Milestone 6 for release-quality validation.
 
-Current version: `0.4.0`
+Current version: `0.5.0`
+
+## Entities
+
+| Entity | Description |
+| --- | --- |
+| `sensor.sa_emergency_incidents` | Count of relevant incidents with structured `incidents` attributes |
+| `sensor.sa_emergency_local_incidents` | Count of local incidents |
+| `sensor.sa_emergency_regional_incidents` | Count of regional incidents (excluding local) |
+| `sensor.sa_emergency_nearest_incident` | Nearest relevant incident |
+| `sensor.sa_emergency_highest_relevance` | Highest current relevance (`none`, `regional`, `local`) |
+| `sensor.sa_emergency_cfs_incidents` | Count of relevant CFS incidents |
+| `sensor.sa_emergency_mfs_incidents` | Count of relevant MFS incidents |
+
+Configure radii, polling interval, and agency toggles via **Settings → Devices & services → SA Emergency → Configure**.
+
+### Example `incidents` attribute
+
+```yaml
+incidents:
+  - incident_id: "CFS:123456"
+    agency: "CFS"
+    type: "Grass Fire"
+    status: "GOING"
+    location: "MONARTO, OLD PRINCES HIGHWAY"
+    distance_km: 81.2
+    bearing_degrees: 94
+    bearing: "E"
+    relevance: "regional"
+    first_reported: "2026-08-30T14:30:00+09:30"
+incidents_exposed: 1
+incidents_truncated: false
+```
+
+The primary sensor state always reflects the full relevant count. When more than 50 relevant incidents exist, the `incidents` attribute list is capped at 50 sorted incidents and `incidents_truncated` is set to `true`.
 
 ## Planned features
 

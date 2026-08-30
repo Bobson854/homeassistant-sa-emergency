@@ -10,9 +10,14 @@ from tests.fixtures import load_json_fixture
 
 from custom_components.sa_emergency.api import SaEmergencyApiError
 from custom_components.sa_emergency.const import (
+    CONF_INCLUDE_CFS,
+    CONF_INCLUDE_MFS,
+    CONF_LOCAL_RADIUS_KM,
+    CONF_REGIONAL_RADIUS_KM,
     DOMAIN,
     SOURCE_CFS_CURRENT_INCIDENTS,
     SOURCE_MFS_CURRENT_INCIDENTS,
+    SOURCE_STATUS_DISABLED,
     SOURCE_STATUS_ERROR,
     SOURCE_STATUS_OK,
 )
@@ -34,8 +39,14 @@ def _setup_coordinator(
     cfs_side_effect: Exception | None = None,
     mfs_return: list[dict] | None = None,
     mfs_side_effect: Exception | None = None,
+    options: dict | None = None,
 ) -> SaEmergencyDataUpdateCoordinator:
-    entry = MockConfigEntry(domain=DOMAIN, data={}, unique_id=DOMAIN)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={},
+        unique_id=DOMAIN,
+        options=options or {},
+    )
     entry.add_to_hass(hass)
     coordinator = SaEmergencyDataUpdateCoordinator(hass, entry)
 
@@ -466,3 +477,109 @@ async def test_coordinator_only_non_spatial_incidents(hass: HomeAssistant) -> No
     assert coordinator.data.incidents_relevant == []
     assert coordinator.data.highest_relevance == "none"
     assert coordinator.data.last_successful_update is not None
+
+
+async def test_coordinator_custom_radii_alter_classification(
+    hass: HomeAssistant,
+) -> None:
+    """Test configured radii change relevance classification."""
+    coordinator = _setup_coordinator(
+        hass,
+        cfs_return=load_json_fixture("cfs_valid_single.json"),
+        options={
+            CONF_LOCAL_RADIUS_KM: 200.0,
+            CONF_REGIONAL_RADIUS_KM: 250.0,
+        },
+    )
+
+    await coordinator.async_refresh()
+
+    assert len(coordinator.data.incidents_local) == 1
+    assert coordinator.data.incidents_regional == []
+
+
+async def test_coordinator_custom_scan_interval(hass: HomeAssistant) -> None:
+    """Test configured polling interval sets coordinator update interval."""
+    from datetime import timedelta
+
+    from homeassistant.const import CONF_SCAN_INTERVAL
+
+    coordinator = _setup_coordinator(
+        hass,
+        options={CONF_SCAN_INTERVAL: 300},
+    )
+
+    assert coordinator.update_interval == timedelta(seconds=300)
+
+
+async def test_coordinator_disabled_cfs_skips_api_call(hass: HomeAssistant) -> None:
+    """Test disabled CFS source is not fetched."""
+    cfs_mock = AsyncMock(return_value=load_json_fixture("cfs_valid_single.json"))
+    coordinator = _setup_coordinator(
+        hass,
+        mfs_return=_mfs_attributes_records("mfs_valid_single.json"),
+        options={CONF_INCLUDE_CFS: False, CONF_INCLUDE_MFS: True},
+    )
+    coordinator.api.async_get_cfs_incidents = cfs_mock  # type: ignore[method-assign]
+
+    await coordinator.async_refresh()
+
+    cfs_mock.assert_not_called()
+    assert (
+        coordinator.data.source_status[SOURCE_CFS_CURRENT_INCIDENTS].status
+        == SOURCE_STATUS_DISABLED
+    )
+    assert len(coordinator.data.mfs_incidents) == 1
+
+
+async def test_coordinator_disabled_mfs_skips_api_call(hass: HomeAssistant) -> None:
+    """Test disabled MFS source is not fetched."""
+    mfs_mock = AsyncMock(return_value=_mfs_attributes_records("mfs_valid_single.json"))
+    coordinator = _setup_coordinator(
+        hass,
+        cfs_return=load_json_fixture("cfs_valid_single.json"),
+        options={CONF_INCLUDE_CFS: True, CONF_INCLUDE_MFS: False},
+    )
+    coordinator.api.async_get_mfs_incidents = mfs_mock  # type: ignore[method-assign]
+
+    await coordinator.async_refresh()
+
+    mfs_mock.assert_not_called()
+    assert (
+        coordinator.data.source_status[SOURCE_MFS_CURRENT_INCIDENTS].status
+        == SOURCE_STATUS_DISABLED
+    )
+
+
+async def test_coordinator_only_enabled_source_failure_fails(
+    hass: HomeAssistant,
+) -> None:
+    """Test failure of the only enabled source fails the update."""
+    coordinator = _setup_coordinator(
+        hass,
+        cfs_side_effect=SaEmergencyApiError("CFS unavailable"),
+        options={CONF_INCLUDE_CFS: True, CONF_INCLUDE_MFS: False},
+    )
+
+    with pytest.raises(UpdateFailed):
+        await coordinator._async_update_data()
+
+
+async def test_coordinator_disabled_source_not_counted_in_partial_failure(
+    hass: HomeAssistant,
+) -> None:
+    """Test disabled sources are excluded from all-enabled-sources-failed logic."""
+    coordinator = _setup_coordinator(
+        hass,
+        cfs_return=load_json_fixture("cfs_valid_single.json"),
+        mfs_side_effect=SaEmergencyApiError("MFS unavailable"),
+        options={CONF_INCLUDE_CFS: True, CONF_INCLUDE_MFS: False},
+    )
+
+    await coordinator.async_refresh()
+
+    assert len(coordinator.data.cfs_incidents) == 1
+    assert (
+        coordinator.data.source_status[SOURCE_MFS_CURRENT_INCIDENTS].status
+        == SOURCE_STATUS_DISABLED
+    )

@@ -20,9 +20,9 @@ This document describes the **planned V1 architecture and behaviour**. Implement
 | Distance, bearing, cardinal direction | Implemented (Milestone 4) |
 | Local/regional relevance classification | Implemented (Milestone 4) |
 | Geographic incident collections and sorting | Implemented (Milestone 4) |
-| Temporary development status sensor | Implemented (Milestone 4) |
-| Planned stable V1 sensors | Not implemented |
-| Options Flow | Not implemented |
+| Options Flow (radii, polling, agency toggles) | Implemented (Milestone 5) |
+| Stable V1 sensor suite | Implemented (Milestone 5) |
+| Structured relevant incident attributes | Implemented (Milestone 5) |
 | HACS release | Not yet published |
 
 ### Milestone 2 implementation notes
@@ -30,7 +30,7 @@ This document describes the **planned V1 architecture and behaviour**. Implement
 * CFS `Location` values are parsed as `"latitude,longitude"` comma-separated decimal degrees (verified against the live feed).
 * Incidents without usable coordinates are **retained** with `latitude=None` and `longitude=None` rather than rejected, so later geography processing can treat them as non-spatial.
 * Geography fields are populated in Milestone 4; see Milestone 4 implementation notes below.
-* The temporary `sensor.sa_emergency_status` entity is a development aid only and is not part of the final V1 entity contract.
+* The temporary development sensor has been replaced by the stable V1 sensor suite documented in section 14.
 
 ### Milestone 3 implementation notes
 
@@ -52,8 +52,18 @@ This document describes the **planned V1 architecture and behaviour**. Implement
 * Incidents at the same location as Home Assistant (`distance < 1e-6` km) receive `distance_km = 0.0`, `bearing_degrees = None`, and `bearing_cardinal = None`.
 * Non-spatial incidents remain in `incidents_all` with `relevance = none` and are excluded from relevant/local/regional collections.
 * Relevance boundaries: `<= 25.0` km local, `> 25.0` and `<= 100.0` km regional, otherwise none. Default radii are constants until Milestone 5 Options Flow.
-* `MAX_RELEVANT_INCIDENTS = 50` is defined but not enforced until Milestone 5 stable sensor exposure.
+* `MAX_RELEVANT_INCIDENTS = 50` is enforced only on the primary sensor's `incidents` attribute; sensor state and count sensors use the full classified totals.
 * `data.incidents` remains a compatibility alias for `incidents_all`.
+
+### Milestone 5 implementation notes
+
+* Options are stored in `entry.options` and applied via `OptionsFlowWithReload` without an additional config-entry update listener.
+* Disabled sources use `source_status = disabled` and are not treated as degraded availability.
+* Agency count sensors (`CFS incidents`, `MFS incidents`) report relevant incidents only via `cfs_relevant_incidents` / `mfs_relevant_incidents`, not statewide normalized totals.
+* When an enabled agency source fails, its count sensor state is unknown (`None`) while `source_status = error` remains visible in attributes.
+* When an agency is disabled through options, its sensor remains registered with unknown state and `enabled = false`.
+* Public incident attributes omit unavailable fields rather than fabricating placeholder values. Internal field names are mapped to the stable public schema (`type`, `location`, `bearing`, `aircraft`).
+* The temporary `sensor.sa_emergency_status` development entity has been removed.
 
 The core V1 objective remains:
 

@@ -49,6 +49,27 @@ def test_sa_emergency_data_filters_agency_incidents() -> None:
     assert [incident.incident_id for incident in data.mfs_incidents] == ["MFS:2"]
 
 
+def test_sa_emergency_data_filters_relevant_agency_incidents() -> None:
+    """Test relevant agency helpers return only relevant subsets."""
+    local_cfs = _incident(AGENCY_CFS, SOURCE_CFS_CURRENT_INCIDENTS, "CFS:1")
+    local_cfs.relevance = "local"
+    regional_mfs = _incident(AGENCY_MFS, SOURCE_MFS_CURRENT_INCIDENTS, "MFS:2")
+    regional_mfs.relevance = "regional"
+    statewide_cfs = _incident(AGENCY_CFS, SOURCE_CFS_CURRENT_INCIDENTS, "CFS:3")
+    statewide_cfs.relevance = "none"
+
+    data = SaEmergencyData(
+        incidents_all=[local_cfs, regional_mfs, statewide_cfs],
+        incidents_relevant=[local_cfs, regional_mfs],
+        incidents_local=[local_cfs],
+        incidents_regional=[regional_mfs],
+    )
+
+    assert [item.incident_id for item in data.cfs_relevant_incidents] == ["CFS:1"]
+    assert [item.incident_id for item in data.mfs_relevant_incidents] == ["MFS:2"]
+    assert [item.incident_id for item in data.cfs_incidents] == ["CFS:1", "CFS:3"]
+
+
 def test_incident_requires_explicit_source() -> None:
     """Test Incident source must be supplied explicitly."""
     with pytest.raises(TypeError):
