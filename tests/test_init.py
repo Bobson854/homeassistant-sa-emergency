@@ -47,9 +47,12 @@ async def test_setup_and_unload_entry(hass: HomeAssistant, monkeypatch) -> None:
     assert state is not None
     assert state.state == "1"
     assert state.attributes["development_sensor"] is True
-    assert state.attributes["total_normalized_incidents"] == 1
+    assert state.attributes["total_source_incidents"] == 1
+    assert state.attributes["relevant_incidents"] == 1
     assert state.attributes["cfs"]["status"] == "ok"
     assert state.attributes["mfs"]["status"] == "ok"
+    assert "latitude" not in state.attributes
+    assert "longitude" not in state.attributes
 
     assert await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()

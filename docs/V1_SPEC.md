@@ -17,8 +17,10 @@ This document describes the **planned V1 architecture and behaviour**. Implement
 | MFS current incidents API client | Implemented (Milestone 3) |
 | MFS normalization to `Incident` model | Implemented (Milestone 3) |
 | Multi-source coordinator with partial failure handling | Implemented (Milestone 3) |
-| Temporary development status sensor | Implemented (Milestone 3) |
-| Distance, bearing, relevance | Not implemented |
+| Distance, bearing, cardinal direction | Implemented (Milestone 4) |
+| Local/regional relevance classification | Implemented (Milestone 4) |
+| Geographic incident collections and sorting | Implemented (Milestone 4) |
+| Temporary development status sensor | Implemented (Milestone 4) |
 | Planned stable V1 sensors | Not implemented |
 | Options Flow | Not implemented |
 | HACS release | Not yet published |
@@ -27,7 +29,7 @@ This document describes the **planned V1 architecture and behaviour**. Implement
 
 * CFS `Location` values are parsed as `"latitude,longitude"` comma-separated decimal degrees (verified against the live feed).
 * Incidents without usable coordinates are **retained** with `latitude=None` and `longitude=None` rather than rejected, so later geography processing can treat them as non-spatial.
-* Geography fields (`distance_km`, `bearing_degrees`, `bearing_cardinal`, `relevance`) remain unset (`None`) until Milestone 4.
+* Geography fields are populated in Milestone 4; see Milestone 4 implementation notes below.
 * The temporary `sensor.sa_emergency_status` entity is a development aid only and is not part of the final V1 entity contract.
 
 ### Milestone 3 implementation notes
@@ -41,6 +43,17 @@ This document describes the **planned V1 architecture and behaviour**. Implement
 * MFS-only fields such as `resources`, `fire_ban_district`, `level`, and `message_url` remain `None`.
 * Coordinator partial failure behaviour: one agency source may fail while the other succeeds; overall update fails only when both sources fail.
 * `Incident.source` must be supplied explicitly by each normalizer; there is no CFS default on the model.
+
+### Milestone 4 implementation notes
+
+* Geographic processing uses `hass.config.latitude` and `hass.config.longitude` only. Coordinates are never logged, sent to external APIs, or exposed through sensor attributes.
+* Distance uses the Haversine great-circle formula with Earth radius `6371.0088` km. Classification uses full-precision distance; stored `distance_km` is rounded to one decimal place.
+* Bearing is stored as the nearest whole degree (`0 <= bearing < 360`). Cardinal direction uses eight equal 45° sectors with explicit wraparound at north.
+* Incidents at the same location as Home Assistant (`distance < 1e-6` km) receive `distance_km = 0.0`, `bearing_degrees = None`, and `bearing_cardinal = None`.
+* Non-spatial incidents remain in `incidents_all` with `relevance = none` and are excluded from relevant/local/regional collections.
+* Relevance boundaries: `<= 25.0` km local, `> 25.0` and `<= 100.0` km regional, otherwise none. Default radii are constants until Milestone 5 Options Flow.
+* `MAX_RELEVANT_INCIDENTS = 50` is defined but not enforced until Milestone 5 stable sensor exposure.
+* `data.incidents` remains a compatibility alias for `incidents_all`.
 
 The core V1 objective remains:
 

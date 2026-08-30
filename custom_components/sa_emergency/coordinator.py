@@ -13,6 +13,8 @@ from homeassistant.util import dt as dt_util
 
 from .api import SaEmergencyApi, SaEmergencyApiError
 from .const import (
+    DEFAULT_LOCAL_RADIUS_KM,
+    DEFAULT_REGIONAL_RADIUS_KM,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     SOURCE_CFS_CURRENT_INCIDENTS,
@@ -20,6 +22,7 @@ from .const import (
     SOURCE_STATUS_ERROR,
     SOURCE_STATUS_OK,
 )
+from .geography import build_geographic_data, get_home_coordinates
 from .models import Incident, SaEmergencyData, SourceStatus
 from .normalizer import normalize_cfs_incident, normalize_mfs_incident
 
@@ -49,7 +52,7 @@ class SaEmergencyDataUpdateCoordinator(DataUpdateCoordinator[SaEmergencyData]):
         self.api = SaEmergencyApi(hass)
 
     async def _async_update_data(self) -> SaEmergencyData:
-        """Fetch and normalize CFS and MFS incidents."""
+        """Fetch, normalize, and enrich CFS and MFS incidents."""
         cfs_incidents, cfs_status = await self._async_fetch_source(
             SOURCE_CFS_CURRENT_INCIDENTS,
             self.api.async_get_cfs_incidents,
@@ -69,7 +72,16 @@ class SaEmergencyDataUpdateCoordinator(DataUpdateCoordinator[SaEmergencyData]):
                 "No current incident data available from CFS or MFS sources"
             )
 
-        incidents = cfs_incidents + mfs_incidents
+        home_lat, home_lon = get_home_coordinates(self.hass)
+        merged_incidents = cfs_incidents + mfs_incidents
+        data = build_geographic_data(
+            merged_incidents,
+            home_lat,
+            home_lon,
+            local_radius_km=DEFAULT_LOCAL_RADIUS_KM,
+            regional_radius_km=DEFAULT_REGIONAL_RADIUS_KM,
+        )
+
         last_successful_update = None
         if (
             cfs_status.status == SOURCE_STATUS_OK
@@ -77,14 +89,12 @@ class SaEmergencyDataUpdateCoordinator(DataUpdateCoordinator[SaEmergencyData]):
         ):
             last_successful_update = dt_util.utcnow()
 
-        return SaEmergencyData(
-            incidents=incidents,
-            source_status={
-                SOURCE_CFS_CURRENT_INCIDENTS: cfs_status,
-                SOURCE_MFS_CURRENT_INCIDENTS: mfs_status,
-            },
-            last_successful_update=last_successful_update,
-        )
+        data.source_status = {
+            SOURCE_CFS_CURRENT_INCIDENTS: cfs_status,
+            SOURCE_MFS_CURRENT_INCIDENTS: mfs_status,
+        }
+        data.last_successful_update = last_successful_update
+        return data
 
     async def _async_fetch_source(
         self,

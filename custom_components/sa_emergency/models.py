@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Any
 
-from .const import AGENCY_CFS, AGENCY_MFS
+from .const import AGENCY_CFS, AGENCY_MFS, RELEVANCE_NONE
 
 
 @dataclass(slots=True)
@@ -61,20 +61,44 @@ class SourceStatus:
 class SaEmergencyData:
     """Coordinator runtime data."""
 
-    incidents: list[Incident] = field(default_factory=list)
+    incidents_all: list[Incident] = field(default_factory=list)
+    incidents_relevant: list[Incident] = field(default_factory=list)
+    incidents_local: list[Incident] = field(default_factory=list)
+    incidents_regional: list[Incident] = field(default_factory=list)
     source_status: dict[str, SourceStatus] = field(default_factory=dict)
     last_successful_update: datetime | None = None
+    nearest_incident: Incident | None = None
+    highest_relevance: str = RELEVANCE_NONE
+
+    @property
+    def incidents(self) -> list[Incident]:
+        """Compatibility alias for the complete normalized incident collection."""
+        return self.incidents_all
 
     @property
     def cfs_incidents(self) -> list[Incident]:
         """Return normalized CFS incidents."""
         return [
-            incident for incident in self.incidents if incident.agency == AGENCY_CFS
+            incident for incident in self.incidents_all if incident.agency == AGENCY_CFS
         ]
 
     @property
     def mfs_incidents(self) -> list[Incident]:
         """Return normalized MFS incidents."""
         return [
-            incident for incident in self.incidents if incident.agency == AGENCY_MFS
+            incident for incident in self.incidents_all if incident.agency == AGENCY_MFS
         ]
+
+    @property
+    def non_relevant_incident_count(self) -> int:
+        """Return incidents outside the regional radius or without coordinates."""
+        return len(self.incidents_all) - len(self.incidents_relevant)
+
+    @property
+    def non_spatial_incident_count(self) -> int:
+        """Return incidents without usable coordinates."""
+        return sum(
+            1
+            for incident in self.incidents_all
+            if incident.latitude is None or incident.longitude is None
+        )

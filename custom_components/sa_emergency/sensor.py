@@ -10,6 +10,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
+    DEFAULT_LOCAL_RADIUS_KM,
+    DEFAULT_REGIONAL_RADIUS_KM,
     DEV_SENSOR_INCIDENT_SAMPLE_LIMIT,
     DOMAIN,
     NAME,
@@ -34,7 +36,7 @@ async def async_setup_entry(
 class SaEmergencyDevelopmentSensor(
     CoordinatorEntity[SaEmergencyDataUpdateCoordinator], SensorEntity
 ):
-    """Temporary development sensor for Milestone 3.
+    """Temporary development sensor for Milestone 4.
 
     This entity is not part of the final V1 sensor contract documented in
     docs/V1_SPEC.md and may change or be removed before release.
@@ -61,8 +63,8 @@ class SaEmergencyDevelopmentSensor(
 
     @property
     def native_value(self) -> int:
-        """Return the total normalized incident count across all sources."""
-        return len(self.coordinator.data.incidents)
+        """Return the count of geographically relevant incidents."""
+        return len(self.coordinator.data.incidents_relevant)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -72,14 +74,35 @@ class SaEmergencyDevelopmentSensor(
         mfs_status = data.source_status.get(SOURCE_MFS_CURRENT_INCIDENTS)
 
         sample: list[dict[str, Any]] = []
-        for incident in data.incidents[:DEV_SENSOR_INCIDENT_SAMPLE_LIMIT]:
-            sample.append(incident.as_dict())
+        for incident in data.incidents_relevant[:DEV_SENSOR_INCIDENT_SAMPLE_LIMIT]:
+            sample.append(
+                {
+                    "incident_id": incident.incident_id,
+                    "agency": incident.agency,
+                    "incident_type": incident.incident_type,
+                    "distance_km": incident.distance_km,
+                    "bearing_degrees": incident.bearing_degrees,
+                    "bearing_cardinal": incident.bearing_cardinal,
+                    "relevance": incident.relevance,
+                }
+            )
 
         attributes: dict[str, Any] = {
             "development_sensor": True,
-            "total_normalized_incidents": len(data.incidents),
+            "total_source_incidents": len(data.incidents_all),
+            "relevant_incidents": len(data.incidents_relevant),
+            "local_incidents": len(data.incidents_local),
+            "regional_incidents": len(data.incidents_regional),
+            "non_relevant_incidents": data.non_relevant_incident_count,
+            "non_spatial_incidents": data.non_spatial_incident_count,
+            "highest_relevance": data.highest_relevance,
+            "local_radius_km": DEFAULT_LOCAL_RADIUS_KM,
+            "regional_radius_km": DEFAULT_REGIONAL_RADIUS_KM,
             "incident_sample": sample,
         }
+
+        if data.nearest_incident is not None:
+            attributes["nearest_incident_id"] = data.nearest_incident.incident_id
 
         if cfs_status is not None:
             attributes["cfs"] = cfs_status.as_dict()

@@ -16,8 +16,20 @@ if sys.platform == "win32":
 
 pytest_plugins = "pytest_homeassistant_custom_component"
 
+# Public South Australian reference coordinates for geographic tests.
+TEST_HOME_LAT = -34.9285
+TEST_HOME_LON = 138.6007
+
 
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(enable_custom_integrations):
     """Load custom integration fixtures for every test."""
+    return
+
+
+@pytest.fixture(autouse=True)
+def set_test_home_location(hass):
+    """Use a stable Adelaide reference location for geographic processing."""
+    hass.config.latitude = TEST_HOME_LAT
+    hass.config.longitude = TEST_HOME_LON
     return

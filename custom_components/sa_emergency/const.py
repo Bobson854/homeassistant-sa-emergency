@@ -36,9 +36,16 @@ SA_TIMEZONE = "Australia/Adelaide"
 CFS_TIMEZONE = SA_TIMEZONE
 
 # Planned V1 defaults (used when options flow is implemented).
-DEFAULT_LOCAL_RADIUS_KM = 25
-DEFAULT_REGIONAL_RADIUS_KM = 100
+DEFAULT_LOCAL_RADIUS_KM = 25.0
+DEFAULT_REGIONAL_RADIUS_KM = 100.0
 DEFAULT_UPDATE_INTERVAL_SECONDS = 180
+
+# Geographic calculation constants.
+EARTH_RADIUS_KM = 6371.0088
+SAME_LOCATION_TOLERANCE_KM = 1e-6
+
+# Relevant incident exposure safeguard (enforced in Milestone 5 sensors).
+MAX_RELEVANT_INCIDENTS = 50
 
 DEFAULT_SCAN_INTERVAL = timedelta(seconds=DEFAULT_UPDATE_INTERVAL_SECONDS)
 

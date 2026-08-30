@@ -35,7 +35,7 @@ def _incident(agency: str, source: str, incident_id: str) -> Incident:
 def test_sa_emergency_data_filters_agency_incidents() -> None:
     """Test mixed collections return correct agency subsets."""
     data = SaEmergencyData(
-        incidents=[
+        incidents_all=[
             _incident(AGENCY_CFS, SOURCE_CFS_CURRENT_INCIDENTS, "CFS:1"),
             _incident(AGENCY_MFS, SOURCE_MFS_CURRENT_INCIDENTS, "MFS:2"),
             _incident(AGENCY_CFS, SOURCE_CFS_CURRENT_INCIDENTS, "CFS:3"),

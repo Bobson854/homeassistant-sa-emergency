@@ -21,13 +21,13 @@ Planned authoritative sources include:
 
 ## Status
 
-Milestone 3 — **CFS and MFS incident ingestion implemented**.
+Milestone 4 — **geography and relevance classification implemented**.
 
-The integration polls the official CFS JSON feed and the official MFS ArcGIS incident layer, normalizes both into a shared internal `Incident` model, and merges them in the coordinator. Partial source failure is tolerated: if one agency feed fails, valid data from the other is retained.
+The integration polls the official CFS JSON feed and the official MFS ArcGIS incident layer, normalizes both into a shared internal `Incident` model, and merges them in the coordinator. Distance, bearing, and local/regional relevance are calculated from the configured Home Assistant location using default radii of 25 km (local) and 100 km (regional). Partial source failure is tolerated: if one agency feed fails, valid data from the other is retained and still undergoes geographic processing.
 
-**Not yet implemented:** distance/bearing calculations, local/regional relevance, Options Flow, and the final stable V1 sensor suite. The current `sensor.sa_emergency_status` entity is a temporary development interface and may change before V1.
+**Not yet implemented:** configurable radius Options Flow, the final stable V1 sensor suite, CFS public warnings, aviation/context enrichment, or warning-polygon relevance. The current `sensor.sa_emergency_status` entity is a temporary development interface and may change before V1.
 
-Current version: `0.3.0`
+Current version: `0.4.0`
 
 ## Planned features
 
