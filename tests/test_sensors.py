@@ -15,7 +15,6 @@ from custom_components.sa_emergency.const import (
     RELEVANCE_REGIONAL,
     SOURCE_CFS_CURRENT_INCIDENTS,
     SOURCE_STATUS_DISABLED,
-    SOURCE_STATUS_ERROR,
 )
 from custom_components.sa_emergency.models import (
     Incident,
@@ -126,32 +125,26 @@ def test_nearest_incident_state_prefers_type_then_location() -> None:
 
 async def test_sensor_states_after_setup(hass: HomeAssistant, monkeypatch) -> None:
     """Test final sensor states for mixed local/regional incidents."""
+    from tests.ims_helpers import ims_cfs_record
+
     monkeypatch.setattr(
-        "custom_components.sa_emergency.coordinator.SaEmergencyApi.async_get_cfs_incidents",
+        "custom_components.sa_emergency.coordinator.SaEmergencyApi.async_get_ims_incidents",
         AsyncMock(
             return_value=[
-                {
-                    "IncidentNo": "LOCAL1",
-                    "Date": "30/08/2026",
-                    "Time": "14:30",
-                    "Type": "Grass Fire",
-                    "Status": "GOING",
-                    "Location": "-34.95,138.60",
-                },
-                {
-                    "IncidentNo": "REGIONAL1",
-                    "Date": "30/08/2026",
-                    "Time": "14:30",
-                    "Type": "Structure Fire",
-                    "Status": "GOING",
-                    "Location": "-35.12,139.57",
-                },
+                ims_cfs_record(
+                    ident="LOCAL1",
+                    event="Grass Fire",
+                    lat=-34.95,
+                    long=138.60,
+                ),
+                ims_cfs_record(
+                    ident="REGIONAL1",
+                    event="Structure Fire",
+                    lat=-35.12,
+                    long=139.57,
+                ),
             ]
         ),
-    )
-    monkeypatch.setattr(
-        "custom_components.sa_emergency.coordinator.SaEmergencyApi.async_get_mfs_incidents",
-        AsyncMock(return_value=[]),
     )
 
     entry = MockConfigEntry(domain=DOMAIN, data={}, unique_id=DOMAIN)
@@ -167,39 +160,26 @@ async def test_sensor_states_after_setup(hass: HomeAssistant, monkeypatch) -> No
     assert hass.states.get("sensor.sa_emergency_cfs_incidents").state == "2"
 
 
-async def test_agency_sensor_unknown_on_source_error(
+async def test_agency_sensor_unavailable_when_ims_fails_setup(
     hass: HomeAssistant, monkeypatch
 ) -> None:
-    """Test agency count sensors distinguish source failure from zero incidents."""
+    """Test setup fails when IMS is unavailable so agency sensors are not loaded."""
     from custom_components.sa_emergency.api import SaEmergencyApiError
 
     monkeypatch.setattr(
-        "custom_components.sa_emergency.coordinator.SaEmergencyApi.async_get_cfs_incidents",
-        AsyncMock(side_effect=SaEmergencyApiError("CFS unavailable")),
-    )
-    monkeypatch.setattr(
-        "custom_components.sa_emergency.coordinator.SaEmergencyApi.async_get_mfs_incidents",
-        AsyncMock(return_value=[]),
+        "custom_components.sa_emergency.coordinator.SaEmergencyApi.async_get_ims_incidents",
+        AsyncMock(side_effect=SaEmergencyApiError("IMS unavailable")),
     )
 
     entry = MockConfigEntry(domain=DOMAIN, data={}, unique_id=DOMAIN)
     entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
-
-    cfs = hass.states.get("sensor.sa_emergency_cfs_incidents")
-    assert cfs.state in {"unknown", "unavailable", "None", ""}
-    assert cfs.attributes["status"] == SOURCE_STATUS_ERROR
+    assert not await hass.config_entries.async_setup(entry.entry_id)
 
 
 async def test_agency_sensor_disabled_source(hass: HomeAssistant, monkeypatch) -> None:
     """Test disabled agency sensors remain present with disabled status."""
     monkeypatch.setattr(
-        "custom_components.sa_emergency.coordinator.SaEmergencyApi.async_get_cfs_incidents",
-        AsyncMock(return_value=[]),
-    )
-    monkeypatch.setattr(
-        "custom_components.sa_emergency.coordinator.SaEmergencyApi.async_get_mfs_incidents",
+        "custom_components.sa_emergency.coordinator.SaEmergencyApi.async_get_ims_incidents",
         AsyncMock(return_value=[]),
     )
 
@@ -224,24 +204,15 @@ async def test_no_relevant_incidents_nearest_sensor(
     hass: HomeAssistant, monkeypatch
 ) -> None:
     """Test nearest and highest relevance sensors with no relevant incidents."""
+    from tests.ims_helpers import ims_cfs_record
+
     monkeypatch.setattr(
-        "custom_components.sa_emergency.coordinator.SaEmergencyApi.async_get_cfs_incidents",
+        "custom_components.sa_emergency.coordinator.SaEmergencyApi.async_get_ims_incidents",
         AsyncMock(
             return_value=[
-                {
-                    "IncidentNo": "FAR1",
-                    "Date": "30/08/2026",
-                    "Time": "14:30",
-                    "Type": "Grass Fire",
-                    "Status": "GOING",
-                    "Location": "-37.831,140.779",
-                }
+                ims_cfs_record(ident="FAR1", lat=-37.831, long=140.779),
             ]
         ),
-    )
-    monkeypatch.setattr(
-        "custom_components.sa_emergency.coordinator.SaEmergencyApi.async_get_mfs_incidents",
-        AsyncMock(return_value=[]),
     )
 
     entry = MockConfigEntry(domain=DOMAIN, data={}, unique_id=DOMAIN)

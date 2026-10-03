@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
-from tests.fixtures import load_json_fixture
+from tests.ims_helpers import ims_cfs_record, load_ims_attribute_records
 
 from custom_components.sa_emergency.const import (
     DOMAIN,
@@ -15,28 +15,18 @@ from custom_components.sa_emergency.const import (
 from custom_components.sa_emergency.presentation import incident_to_public_dict
 
 
-def _mock_both_sources(
-    monkeypatch,
-    *,
-    cfs_return=None,
-    mfs_return=None,
-) -> None:
+def _mock_ims_source(monkeypatch, *, ims_return=None) -> None:
     monkeypatch.setattr(
-        "custom_components.sa_emergency.coordinator.SaEmergencyApi.async_get_cfs_incidents",
-        AsyncMock(return_value=cfs_return if cfs_return is not None else []),
-    )
-    monkeypatch.setattr(
-        "custom_components.sa_emergency.coordinator.SaEmergencyApi.async_get_mfs_incidents",
-        AsyncMock(return_value=mfs_return if mfs_return is not None else []),
+        "custom_components.sa_emergency.coordinator.SaEmergencyApi.async_get_ims_incidents",
+        AsyncMock(return_value=ims_return if ims_return is not None else []),
     )
 
 
 async def test_setup_and_unload_entry(hass: HomeAssistant, monkeypatch) -> None:
     """Test integration setup loads V1 sensors and unloads cleanly."""
-    _mock_both_sources(
+    _mock_ims_source(
         monkeypatch,
-        cfs_return=load_json_fixture("cfs_valid_single.json"),
-        mfs_return=[],
+        ims_return=[ims_cfs_record(ident="123456", lat=-35.1234, long=139.5678)],
     )
 
     entry = MockConfigEntry(domain=DOMAIN, data={}, unique_id=DOMAIN)
@@ -70,41 +60,26 @@ async def test_setup_and_unload_entry(hass: HomeAssistant, monkeypatch) -> None:
     assert hass.states.get("sensor.sa_emergency_incidents").state == "unavailable"
 
 
-async def test_setup_with_partial_source_failure(
+async def test_setup_fails_when_ims_unavailable(
     hass: HomeAssistant, monkeypatch
 ) -> None:
-    """Test primary sensors remain available when one enabled source fails."""
+    """Test setup fails when the combined IMS feed is unavailable."""
     from custom_components.sa_emergency.api import SaEmergencyApiError
 
     monkeypatch.setattr(
-        "custom_components.sa_emergency.coordinator.SaEmergencyApi.async_get_cfs_incidents",
-        AsyncMock(return_value=load_json_fixture("cfs_valid_single.json")),
-    )
-    monkeypatch.setattr(
-        "custom_components.sa_emergency.coordinator.SaEmergencyApi.async_get_mfs_incidents",
-        AsyncMock(side_effect=SaEmergencyApiError("MFS unavailable")),
+        "custom_components.sa_emergency.coordinator.SaEmergencyApi.async_get_ims_incidents",
+        AsyncMock(side_effect=SaEmergencyApiError("IMS unavailable")),
     )
 
     entry = MockConfigEntry(domain=DOMAIN, data={}, unique_id=DOMAIN)
     entry.add_to_hass(hass)
 
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
-
-    incidents = hass.states.get("sensor.sa_emergency_incidents")
-    cfs = hass.states.get("sensor.sa_emergency_cfs_incidents")
-    mfs = hass.states.get("sensor.sa_emergency_mfs_incidents")
-
-    assert incidents is not None
-    assert incidents.state == "1"
-    assert cfs.state == "1"
-    assert mfs.state in {"unknown", "unavailable", "None", ""}
-    assert mfs.attributes["status"] == "error"
+    assert not await hass.config_entries.async_setup(entry.entry_id)
 
 
 async def test_v1_sensor_entity_registry(hass: HomeAssistant, monkeypatch) -> None:
     """Test stable V1 sensors are registered with expected unique IDs."""
-    _mock_both_sources(monkeypatch)
+    _mock_ims_source(monkeypatch)
 
     entry = MockConfigEntry(domain=DOMAIN, data={}, unique_id=DOMAIN)
     entry.add_to_hass(hass)
@@ -124,9 +99,9 @@ async def test_incident_public_attribute_schema(
     hass: HomeAssistant, monkeypatch
 ) -> None:
     """Test exposed incident attributes use the public schema keys."""
-    _mock_both_sources(
+    _mock_ims_source(
         monkeypatch,
-        cfs_return=load_json_fixture("cfs_valid_single.json"),
+        ims_return=[ims_cfs_record(ident="123456", lat=-35.1234, long=139.5678)],
     )
 
     entry = MockConfigEntry(domain=DOMAIN, data={}, unique_id=DOMAIN)
@@ -143,6 +118,27 @@ async def test_incident_public_attribute_schema(
     assert "bearing" in exposed
     assert "incident_type" not in exposed
     assert "location_name" not in exposed
+    assert "resources" not in exposed
+    assert "aircraft" not in exposed
 
     coordinator = hass.data[DOMAIN][entry.entry_id]
     assert exposed == incident_to_public_dict(coordinator.data.incidents_relevant[0])
+
+
+async def test_combined_feed_populates_cfs_and_mfs_sensors(
+    hass: HomeAssistant, monkeypatch
+) -> None:
+    """Test both agency sensors reflect a combined IMS feed."""
+    _mock_ims_source(
+        monkeypatch,
+        ims_return=load_ims_attribute_records("ims_combined_features.json"),
+    )
+
+    entry = MockConfigEntry(domain=DOMAIN, data={}, unique_id=DOMAIN)
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert hass.states.get("sensor.sa_emergency_cfs_incidents").state == "1"
+    assert hass.states.get("sensor.sa_emergency_mfs_incidents").state == "1"

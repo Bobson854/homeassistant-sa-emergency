@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.1] - Unreleased
+
+### Changed
+
+- Migrated current incident ingestion from the legacy CFS JSON feed and separate MFS FeatureServer query to the combined GeoHub IMS incident layer used by the official CFS map (`cfs-feeds.geohub.sa.gov.au`), restoring reliable CFS incident updates.
+- Agency classification for combined feed records uses the IMS `authority` field (CFS vs MFS).
+- Diagnostics now report the combined `ims_incidents` source URL and per-agency counts from a single upstream request.
+
+### Fixed
+
+- CFS current incidents no longer depend on the legacy CRIIMSON JSON endpoint that currently returns an HTML “File Unavailable” page.
+
 ## [0.6.0] - Unreleased
 
 ### Added

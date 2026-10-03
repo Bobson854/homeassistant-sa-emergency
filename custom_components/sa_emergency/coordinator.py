@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -13,21 +13,44 @@ from homeassistant.util import dt as dt_util
 
 from .api import SaEmergencyApi, SaEmergencyApiError
 from .const import (
+    AGENCY_CFS,
     DOMAIN,
     SOURCE_CFS_CURRENT_INCIDENTS,
+    SOURCE_IMS_CURRENT_INCIDENTS,
     SOURCE_MFS_CURRENT_INCIDENTS,
     SOURCE_STATUS_DISABLED,
-    SOURCE_STATUS_ERROR,
     SOURCE_STATUS_OK,
 )
 from .geography import build_geographic_data, get_home_coordinates
 from .models import Incident, SaEmergencyData, SourceStatus
-from .normalizer import normalize_cfs_incident, normalize_mfs_incident
+from .normalizer import classify_ims_agency, normalize_ims_incident
 from .options import get_integration_options
 
 _LOGGER = logging.getLogger(__name__)
 
 type SaEmergencyConfigEntry = ConfigEntry[None]
+
+
+@dataclass(slots=True)
+class _ImsProcessingResult:
+    """Normalized IMS incidents split by agency with accounting."""
+
+    cfs_incidents: list[Incident]
+    mfs_incidents: list[Incident]
+    raw_count: int
+    cfs_raw_count: int
+    mfs_raw_count: int
+    unknown_authority_skipped: int
+    cfs_skipped: int
+    mfs_skipped: int
+
+    @property
+    def normalized_count(self) -> int:
+        return len(self.cfs_incidents) + len(self.mfs_incidents)
+
+    @property
+    def skipped_count(self) -> int:
+        return self.unknown_authority_skipped + self.cfs_skipped + self.mfs_skipped
 
 
 class SaEmergencyDataUpdateCoordinator(DataUpdateCoordinator[SaEmergencyData]):
@@ -52,106 +75,106 @@ class SaEmergencyDataUpdateCoordinator(DataUpdateCoordinator[SaEmergencyData]):
         self.api = SaEmergencyApi(hass)
 
     async def _async_update_data(self) -> SaEmergencyData:
-        """Fetch, normalize, and enrich enabled incident sources."""
-        cfs_incidents: list[Incident] = []
-        mfs_incidents: list[Incident] = []
+        """Fetch, normalize, and enrich current IMS incidents."""
+        if not self.options.include_cfs and not self.options.include_mfs:
+            raise UpdateFailed("No incident agencies are enabled")
 
-        if self.options.include_cfs:
-            cfs_incidents, cfs_status = await self._async_fetch_source(
-                SOURCE_CFS_CURRENT_INCIDENTS,
-                self.api.async_get_cfs_incidents,
-                normalize_cfs_incident,
-            )
-        else:
-            cfs_status = SourceStatus(
-                status=SOURCE_STATUS_DISABLED,
-                enabled=False,
-            )
+        try:
+            raw_records = await self.api.async_get_ims_incidents()
+        except SaEmergencyApiError as err:
+            raise UpdateFailed(f"IMS incident feed unavailable: {err}") from err
 
-        if self.options.include_mfs:
-            mfs_incidents, mfs_status = await self._async_fetch_source(
-                SOURCE_MFS_CURRENT_INCIDENTS,
-                self.api.async_get_mfs_incidents,
-                normalize_mfs_incident,
-            )
-        else:
-            mfs_status = SourceStatus(
-                status=SOURCE_STATUS_DISABLED,
-                enabled=False,
-            )
+        processed = _process_ims_records(raw_records)
 
-        enabled_statuses = [
-            status
-            for status in (cfs_status, mfs_status)
-            if status.enabled and status.status != SOURCE_STATUS_DISABLED
-        ]
-        if enabled_statuses and all(
-            status.status == SOURCE_STATUS_ERROR for status in enabled_statuses
-        ):
-            raise UpdateFailed(
-                "No current incident data available from enabled incident sources"
-            )
+        cfs_incidents = processed.cfs_incidents if self.options.include_cfs else []
+        mfs_incidents = processed.mfs_incidents if self.options.include_mfs else []
 
         home_lat, home_lon = get_home_coordinates(self.hass)
-        merged_incidents = cfs_incidents + mfs_incidents
         data = build_geographic_data(
-            merged_incidents,
+            cfs_incidents + mfs_incidents,
             home_lat,
             home_lon,
             local_radius_km=self.options.local_radius_km,
             regional_radius_km=self.options.regional_radius_km,
         )
 
-        successful_enabled_sources = [
-            status for status in enabled_statuses if status.status == SOURCE_STATUS_OK
-        ]
-        last_successful_update = (
-            dt_util.utcnow() if successful_enabled_sources else None
+        ims_status = SourceStatus(
+            status=SOURCE_STATUS_OK,
+            raw_count=processed.raw_count,
+            normalized_count=processed.normalized_count,
+            skipped_count=processed.skipped_count,
         )
 
+        if self.options.include_cfs:
+            cfs_status = SourceStatus(
+                status=SOURCE_STATUS_OK,
+                raw_count=processed.cfs_raw_count,
+                normalized_count=len(processed.cfs_incidents),
+                skipped_count=processed.cfs_skipped,
+            )
+        else:
+            cfs_status = SourceStatus(status=SOURCE_STATUS_DISABLED, enabled=False)
+
+        if self.options.include_mfs:
+            mfs_status = SourceStatus(
+                status=SOURCE_STATUS_OK,
+                raw_count=processed.mfs_raw_count,
+                normalized_count=len(processed.mfs_incidents),
+                skipped_count=processed.mfs_skipped,
+            )
+        else:
+            mfs_status = SourceStatus(status=SOURCE_STATUS_DISABLED, enabled=False)
+
         data.source_status = {
+            SOURCE_IMS_CURRENT_INCIDENTS: ims_status,
             SOURCE_CFS_CURRENT_INCIDENTS: cfs_status,
             SOURCE_MFS_CURRENT_INCIDENTS: mfs_status,
         }
-        data.last_successful_update = last_successful_update
+        data.last_successful_update = dt_util.utcnow()
         return data
 
-    async def _async_fetch_source(
-        self,
-        source_key: str,
-        fetch_method: Callable[[], Any],
-        normalize_method: Callable[[dict[str, Any]], Incident | None],
-    ) -> tuple[list[Incident], SourceStatus]:
-        """Fetch and normalize one incident source."""
-        try:
-            raw_records = await fetch_method()
-        except SaEmergencyApiError as err:
-            _LOGGER.warning("%s unavailable: %s", source_key, err)
-            return [], SourceStatus(
-                status=SOURCE_STATUS_ERROR,
-                error=str(err),
-            )
 
-        incidents: list[Incident] = []
-        skipped_count = 0
-        for record in raw_records:
-            incident = normalize_method(record)
-            if incident is None:
-                skipped_count += 1
-                continue
-            incidents.append(incident)
+def _process_ims_records(raw_records: list[dict[str, Any]]) -> _ImsProcessingResult:
+    """Normalize IMS records and split them by agency."""
+    cfs_incidents: list[Incident] = []
+    mfs_incidents: list[Incident] = []
+    cfs_raw_count = 0
+    mfs_raw_count = 0
+    unknown_authority_skipped = 0
+    cfs_skipped = 0
+    mfs_skipped = 0
 
-        _LOGGER.debug(
-            "%s records fetched: %s, incidents normalized: %s, records skipped: %s",
-            source_key,
-            len(raw_records),
-            len(incidents),
-            skipped_count,
-        )
+    for record in raw_records:
+        agency = classify_ims_agency(record.get("authority"))
+        if agency is None:
+            unknown_authority_skipped += 1
+            continue
 
-        return incidents, SourceStatus(
-            status=SOURCE_STATUS_OK,
-            raw_count=len(raw_records),
-            normalized_count=len(incidents),
-            skipped_count=skipped_count,
-        )
+        if agency == AGENCY_CFS:
+            cfs_raw_count += 1
+        else:
+            mfs_raw_count += 1
+
+        incident = normalize_ims_incident(record)
+        if incident is None:
+            if agency == AGENCY_CFS:
+                cfs_skipped += 1
+            else:
+                mfs_skipped += 1
+            continue
+
+        if agency == AGENCY_CFS:
+            cfs_incidents.append(incident)
+        else:
+            mfs_incidents.append(incident)
+
+    return _ImsProcessingResult(
+        cfs_incidents=cfs_incidents,
+        mfs_incidents=mfs_incidents,
+        raw_count=len(raw_records),
+        cfs_raw_count=cfs_raw_count,
+        mfs_raw_count=mfs_raw_count,
+        unknown_authority_skipped=unknown_authority_skipped,
+        cfs_skipped=cfs_skipped,
+        mfs_skipped=mfs_skipped,
+    )

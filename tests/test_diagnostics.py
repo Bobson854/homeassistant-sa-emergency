@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
-from tests.fixtures import load_json_fixture
+from tests.ims_helpers import load_ims_attribute_records
 
 from custom_components.sa_emergency.api import SaEmergencyApiError
 from custom_components.sa_emergency.const import (
@@ -16,10 +16,11 @@ from custom_components.sa_emergency.const import (
     CONF_LOCAL_RADIUS_KM,
     CONF_REGIONAL_RADIUS_KM,
     DOMAIN,
+    IMS_INCIDENTS_URL,
     SOURCE_CFS_CURRENT_INCIDENTS,
+    SOURCE_IMS_CURRENT_INCIDENTS,
     SOURCE_MFS_CURRENT_INCIDENTS,
     SOURCE_STATUS_DISABLED,
-    SOURCE_STATUS_ERROR,
 )
 from custom_components.sa_emergency.diagnostics import (
     _build_diagnostics_payload,
@@ -28,34 +29,21 @@ from custom_components.sa_emergency.diagnostics import (
 )
 
 
-def _mock_sources(
+def _mock_ims_source(
     monkeypatch,
     *,
-    cfs_return=None,
-    cfs_side_effect=None,
-    mfs_return=None,
-    mfs_side_effect=None,
+    ims_return=None,
+    ims_side_effect=None,
 ) -> None:
-    if cfs_side_effect is not None:
+    if ims_side_effect is not None:
         monkeypatch.setattr(
-            "custom_components.sa_emergency.coordinator.SaEmergencyApi.async_get_cfs_incidents",
-            AsyncMock(side_effect=cfs_side_effect),
+            "custom_components.sa_emergency.coordinator.SaEmergencyApi.async_get_ims_incidents",
+            AsyncMock(side_effect=ims_side_effect),
         )
     else:
         monkeypatch.setattr(
-            "custom_components.sa_emergency.coordinator.SaEmergencyApi.async_get_cfs_incidents",
-            AsyncMock(return_value=cfs_return if cfs_return is not None else []),
-        )
-
-    if mfs_side_effect is not None:
-        monkeypatch.setattr(
-            "custom_components.sa_emergency.coordinator.SaEmergencyApi.async_get_mfs_incidents",
-            AsyncMock(side_effect=mfs_side_effect),
-        )
-    else:
-        monkeypatch.setattr(
-            "custom_components.sa_emergency.coordinator.SaEmergencyApi.async_get_mfs_incidents",
-            AsyncMock(return_value=mfs_return if mfs_return is not None else []),
+            "custom_components.sa_emergency.coordinator.SaEmergencyApi.async_get_ims_incidents",
+            AsyncMock(return_value=ims_return if ims_return is not None else []),
         )
 
 
@@ -64,17 +52,13 @@ async def _setup_entry(
     monkeypatch,
     *,
     options: dict | None = None,
-    cfs_return=None,
-    mfs_return=None,
-    cfs_side_effect=None,
-    mfs_side_effect=None,
+    ims_return=None,
+    ims_side_effect=None,
 ) -> MockConfigEntry:
-    _mock_sources(
+    _mock_ims_source(
         monkeypatch,
-        cfs_return=cfs_return,
-        cfs_side_effect=cfs_side_effect,
-        mfs_return=mfs_return,
-        mfs_side_effect=mfs_side_effect,
+        ims_return=ims_return,
+        ims_side_effect=ims_side_effect,
     )
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -93,55 +77,34 @@ async def test_diagnostics_normal_data(hass: HomeAssistant, monkeypatch) -> None
     entry = await _setup_entry(
         hass,
         monkeypatch,
-        cfs_return=load_json_fixture("cfs_valid_single.json"),
+        ims_return=load_ims_attribute_records("ims_combined_features.json"),
     )
 
     diagnostics = await async_get_config_entry_diagnostics(hass, entry)
 
-    assert diagnostics["integration"]["version"] == "0.6.0"
+    assert diagnostics["integration"]["version"] == "0.6.1"
     assert diagnostics["options"]["local_radius_km"] == 25.0
+    assert diagnostics["sources"]["ims_incidents"]["status"] == "ok"
+    assert diagnostics["sources"]["ims_incidents"]["url"] == IMS_INCIDENTS_URL
     assert diagnostics["sources"]["cfs"]["status"] == "ok"
-    assert diagnostics["incidents"]["relevant"] == 1
-    assert diagnostics["incidents"]["total_source"] == 1
+    assert diagnostics["incidents"]["total_source"] == 2
     assert "last_successful_update" in diagnostics
-    assert "incidents" not in diagnostics or isinstance(diagnostics["incidents"], dict)
+    serialized = json.dumps(diagnostics)
+    assert "features" not in serialized
+    assert "Burn Off" not in serialized
 
 
-async def test_diagnostics_partial_cfs_failure(
+async def test_diagnostics_setup_fails_when_ims_unavailable(
     hass: HomeAssistant, monkeypatch
 ) -> None:
-    """Test diagnostics when CFS fails but MFS succeeds."""
-    from tests.test_coordinator import _mfs_attributes_records
-
-    entry = await _setup_entry(
-        hass,
-        monkeypatch,
-        cfs_side_effect=SaEmergencyApiError("CFS unavailable"),
-        mfs_return=_mfs_attributes_records("mfs_valid_single.json"),
+    """Test integration setup fails when the IMS feed is unavailable."""
+    _mock_ims_source(
+        monkeypatch, ims_side_effect=SaEmergencyApiError("IMS unavailable")
     )
+    entry = MockConfigEntry(domain=DOMAIN, data={}, unique_id=DOMAIN)
+    entry.add_to_hass(hass)
 
-    diagnostics = await async_get_config_entry_diagnostics(hass, entry)
-
-    assert diagnostics["sources"]["cfs"]["status"] == SOURCE_STATUS_ERROR
-    assert diagnostics["sources"]["mfs"]["status"] == "ok"
-    assert diagnostics["incidents"]["total_source"] == 1
-
-
-async def test_diagnostics_partial_mfs_failure(
-    hass: HomeAssistant, monkeypatch
-) -> None:
-    """Test diagnostics when MFS fails but CFS succeeds."""
-    entry = await _setup_entry(
-        hass,
-        monkeypatch,
-        cfs_return=load_json_fixture("cfs_valid_single.json"),
-        mfs_side_effect=SaEmergencyApiError("MFS unavailable"),
-    )
-
-    diagnostics = await async_get_config_entry_diagnostics(hass, entry)
-
-    assert diagnostics["sources"]["cfs"]["status"] == "ok"
-    assert diagnostics["sources"]["mfs"]["status"] == SOURCE_STATUS_ERROR
+    assert not await hass.config_entries.async_setup(entry.entry_id)
 
 
 async def test_diagnostics_disabled_source(hass: HomeAssistant, monkeypatch) -> None:
@@ -150,7 +113,7 @@ async def test_diagnostics_disabled_source(hass: HomeAssistant, monkeypatch) -> 
         hass,
         monkeypatch,
         options={CONF_INCLUDE_CFS: True, CONF_INCLUDE_MFS: False},
-        cfs_return=load_json_fixture("cfs_valid_single.json"),
+        ims_return=load_ims_attribute_records("ims_combined_features.json"),
     )
 
     diagnostics = await async_get_config_entry_diagnostics(hass, entry)
@@ -161,14 +124,15 @@ async def test_diagnostics_disabled_source(hass: HomeAssistant, monkeypatch) -> 
 
 
 async def test_diagnostics_empty_feeds(hass: HomeAssistant, monkeypatch) -> None:
-    """Test diagnostics with successful empty source feeds."""
-    entry = await _setup_entry(hass, monkeypatch, cfs_return=[], mfs_return=[])
+    """Test diagnostics with successful empty IMS feed."""
+    entry = await _setup_entry(hass, monkeypatch, ims_return=[])
 
     diagnostics = await async_get_config_entry_diagnostics(hass, entry)
 
     assert diagnostics["incidents"]["total_source"] == 0
     assert diagnostics["incidents"]["relevant"] == 0
     assert diagnostics["incidents"]["highest_relevance"] == "none"
+    assert diagnostics["sources"]["ims_incidents"]["raw_count"] == 0
 
 
 async def test_diagnostics_custom_options(hass: HomeAssistant, monkeypatch) -> None:
@@ -183,7 +147,7 @@ async def test_diagnostics_custom_options(hass: HomeAssistant, monkeypatch) -> N
             CONF_INCLUDE_CFS: False,
             CONF_INCLUDE_MFS: True,
         },
-        mfs_return=[],
+        ims_return=[],
     )
 
     diagnostics = await async_get_config_entry_diagnostics(hass, entry)
@@ -200,7 +164,7 @@ async def test_diagnostics_no_home_location_leakage(
     entry = await _setup_entry(
         hass,
         monkeypatch,
-        cfs_return=load_json_fixture("cfs_valid_single.json"),
+        ims_return=load_ims_attribute_records("ims_cfs_onkaparinga_hills.json"),
     )
 
     diagnostics = await async_get_config_entry_diagnostics(hass, entry)
@@ -227,7 +191,7 @@ def test_build_diagnostics_payload_excludes_raw_incidents() -> None:
     incident = Incident(
         incident_id="CFS:1",
         agency="CFS",
-        source=SOURCE_CFS_CURRENT_INCIDENTS,
+        source=SOURCE_IMS_CURRENT_INCIDENTS,
         incident_type="Grass Fire",
         status="GOING",
         level=None,
@@ -259,18 +223,19 @@ def test_build_diagnostics_payload_excludes_raw_incidents() -> None:
             incidents_local=[incident],
             nearest_incident=incident,
             source_status={
+                SOURCE_IMS_CURRENT_INCIDENTS: SourceStatus(status="ok", raw_count=1),
                 SOURCE_CFS_CURRENT_INCIDENTS: SourceStatus(status="ok", raw_count=1),
                 SOURCE_MFS_CURRENT_INCIDENTS: SourceStatus(status="ok", raw_count=0),
             },
         )
 
     payload = _build_diagnostics_payload(
-        integration_version="0.6.0",
+        integration_version="0.6.1",
         coordinator=_CoordinatorStub(),  # type: ignore[arg-type]
     )
 
     serialized = json.dumps(payload)
     assert "Grass Fire" not in serialized
     assert payload["incidents"]["nearest_incident_id"] == "CFS:1"
-    assert "url" in payload["sources"]["cfs"]
+    assert payload["sources"]["ims_incidents"]["url"] == IMS_INCIDENTS_URL
     assert "features" not in serialized

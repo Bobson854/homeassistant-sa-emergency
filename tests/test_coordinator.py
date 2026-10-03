@@ -6,7 +6,7 @@ import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import UpdateFailed
 from pytest_homeassistant_custom_component.common import MockConfigEntry
-from tests.fixtures import load_json_fixture
+from tests.ims_helpers import ims_cfs_record, ims_mfs_record, load_ims_attribute_records
 
 from custom_components.sa_emergency.api import SaEmergencyApiError
 from custom_components.sa_emergency.const import (
@@ -16,29 +16,19 @@ from custom_components.sa_emergency.const import (
     CONF_REGIONAL_RADIUS_KM,
     DOMAIN,
     SOURCE_CFS_CURRENT_INCIDENTS,
+    SOURCE_IMS_CURRENT_INCIDENTS,
     SOURCE_MFS_CURRENT_INCIDENTS,
     SOURCE_STATUS_DISABLED,
-    SOURCE_STATUS_ERROR,
     SOURCE_STATUS_OK,
 )
 from custom_components.sa_emergency.coordinator import SaEmergencyDataUpdateCoordinator
 
 
-def _mfs_attributes_records(fixture_name: str) -> list[dict]:
-    records: list[dict] = []
-    for feature in load_json_fixture(fixture_name)["features"]:
-        if isinstance(feature, dict) and isinstance(feature.get("attributes"), dict):
-            records.append(feature["attributes"])
-    return records
-
-
 def _setup_coordinator(
     hass: HomeAssistant,
     *,
-    cfs_return: list[dict] | None = None,
-    cfs_side_effect: Exception | None = None,
-    mfs_return: list[dict] | None = None,
-    mfs_side_effect: Exception | None = None,
+    ims_return: list[dict] | None = None,
+    ims_side_effect: Exception | None = None,
     options: dict | None = None,
 ) -> SaEmergencyDataUpdateCoordinator:
     entry = MockConfigEntry(
@@ -50,32 +40,26 @@ def _setup_coordinator(
     entry.add_to_hass(hass)
     coordinator = SaEmergencyDataUpdateCoordinator(hass, entry)
 
-    if cfs_side_effect is not None:
-        coordinator.api.async_get_cfs_incidents = AsyncMock(  # type: ignore[method-assign]
-            side_effect=cfs_side_effect
+    if ims_side_effect is not None:
+        coordinator.api.async_get_ims_incidents = AsyncMock(  # type: ignore[method-assign]
+            side_effect=ims_side_effect
         )
     else:
-        coordinator.api.async_get_cfs_incidents = AsyncMock(  # type: ignore[method-assign]
-            return_value=cfs_return if cfs_return is not None else []
-        )
-
-    if mfs_side_effect is not None:
-        coordinator.api.async_get_mfs_incidents = AsyncMock(  # type: ignore[method-assign]
-            side_effect=mfs_side_effect
-        )
-    else:
-        coordinator.api.async_get_mfs_incidents = AsyncMock(  # type: ignore[method-assign]
-            return_value=mfs_return if mfs_return is not None else []
+        coordinator.api.async_get_ims_incidents = AsyncMock(  # type: ignore[method-assign]
+            return_value=ims_return if ims_return is not None else []
         )
 
     return coordinator
 
 
-async def test_coordinator_normalizes_cfs_records(hass: HomeAssistant) -> None:
-    """Test the coordinator stores normalized CFS incidents."""
+async def test_coordinator_normalizes_ims_records(hass: HomeAssistant) -> None:
+    """Test the coordinator stores normalized IMS incidents."""
     coordinator = _setup_coordinator(
         hass,
-        cfs_return=load_json_fixture("cfs_valid_multiple.json"),
+        ims_return=[
+            ims_cfs_record(ident="CFS1"),
+            ims_cfs_record(ident="CFS2"),
+        ],
     )
 
     await coordinator.async_refresh()
@@ -86,13 +70,24 @@ async def test_coordinator_normalizes_cfs_records(hass: HomeAssistant) -> None:
     assert status.raw_count == 2
     assert status.normalized_count == 2
     assert status.skipped_count == 0
+    ims_status = coordinator.data.source_status[SOURCE_IMS_CURRENT_INCIDENTS]
+    assert ims_status.status == SOURCE_STATUS_OK
+    assert ims_status.raw_count == 2
     assert coordinator.data.last_successful_update is not None
 
 
 async def test_coordinator_skips_records_without_identity(hass: HomeAssistant) -> None:
-    """Test records without IncidentNo are skipped without failing the update."""
-    payload = [*load_json_fixture("cfs_valid_single.json"), {"Type": "Grass Fire"}]
-    coordinator = _setup_coordinator(hass, cfs_return=payload)
+    """Test records without ident are skipped without failing the update."""
+    coordinator = _setup_coordinator(
+        hass,
+        ims_return=[
+            ims_cfs_record(ident="CFS1"),
+            {
+                "authority": "South Australian Country Fire Service",
+                "event": "Grass Fire",
+            },
+        ],
+    )
 
     await coordinator.async_refresh()
 
@@ -101,12 +96,13 @@ async def test_coordinator_skips_records_without_identity(hass: HomeAssistant) -
     assert status.skipped_count == 1
 
 
-async def test_coordinator_both_sources_success(hass: HomeAssistant) -> None:
-    """Test CFS and MFS incidents merge into one collection."""
+async def test_coordinator_both_agencies_from_combined_feed(
+    hass: HomeAssistant,
+) -> None:
+    """Test CFS and MFS incidents from one IMS response merge correctly."""
     coordinator = _setup_coordinator(
         hass,
-        cfs_return=load_json_fixture("cfs_valid_single.json"),
-        mfs_return=_mfs_attributes_records("mfs_valid_single.json"),
+        ims_return=load_ims_attribute_records("ims_combined_features.json"),
     )
 
     await coordinator.async_refresh()
@@ -114,69 +110,22 @@ async def test_coordinator_both_sources_success(hass: HomeAssistant) -> None:
     assert len(coordinator.data.incidents) == 2
     assert len(coordinator.data.cfs_incidents) == 1
     assert len(coordinator.data.mfs_incidents) == 1
-    assert (
-        coordinator.data.source_status[SOURCE_CFS_CURRENT_INCIDENTS].status
-        == SOURCE_STATUS_OK
-    )
-    assert (
-        coordinator.data.source_status[SOURCE_MFS_CURRENT_INCIDENTS].status
-        == SOURCE_STATUS_OK
-    )
 
 
-async def test_coordinator_cfs_success_mfs_failure(hass: HomeAssistant) -> None:
-    """Test valid CFS data is retained when MFS fails."""
+async def test_coordinator_ims_failure_fails_update(hass: HomeAssistant) -> None:
+    """Test IMS transport failure fails the coordinator refresh."""
     coordinator = _setup_coordinator(
         hass,
-        cfs_return=load_json_fixture("cfs_valid_single.json"),
-        mfs_side_effect=SaEmergencyApiError("MFS unavailable"),
+        ims_side_effect=SaEmergencyApiError("IMS unavailable"),
     )
 
-    await coordinator.async_refresh()
-
-    assert len(coordinator.data.cfs_incidents) == 1
-    assert coordinator.data.mfs_incidents == []
-    assert (
-        coordinator.data.source_status[SOURCE_MFS_CURRENT_INCIDENTS].status
-        == SOURCE_STATUS_ERROR
-    )
-    assert coordinator.data.last_successful_update is not None
-
-
-async def test_coordinator_mfs_success_cfs_failure(hass: HomeAssistant) -> None:
-    """Test valid MFS data is retained when CFS fails."""
-    coordinator = _setup_coordinator(
-        hass,
-        cfs_side_effect=SaEmergencyApiError("CFS unavailable"),
-        mfs_return=_mfs_attributes_records("mfs_valid_single.json"),
-    )
-
-    await coordinator.async_refresh()
-
-    assert coordinator.data.cfs_incidents == []
-    assert len(coordinator.data.mfs_incidents) == 1
-    assert (
-        coordinator.data.source_status[SOURCE_CFS_CURRENT_INCIDENTS].status
-        == SOURCE_STATUS_ERROR
-    )
-    assert coordinator.data.last_successful_update is not None
-
-
-async def test_coordinator_both_sources_failure(hass: HomeAssistant) -> None:
-    """Test overall update fails only when both sources fail."""
-    coordinator = _setup_coordinator(
-        hass,
-        cfs_side_effect=SaEmergencyApiError("CFS unavailable"),
-        mfs_side_effect=SaEmergencyApiError("MFS unavailable"),
-    )
-
-    with pytest.raises(UpdateFailed, match="No current incident data"):
+    with pytest.raises(UpdateFailed, match="IMS incident feed unavailable"):
         await coordinator._async_update_data()
 
 
 async def test_coordinator_both_empty_successful(hass: HomeAssistant) -> None:
     """Test empty successful feeds are not treated as source failures."""
-    coordinator = _setup_coordinator(hass, cfs_return=[], mfs_return=[])
+    coordinator = _setup_coordinator(hass, ims_return=[])
 
     await coordinator.async_refresh()
 
@@ -192,72 +141,61 @@ async def test_coordinator_both_empty_successful(hass: HomeAssistant) -> None:
     assert coordinator.data.last_successful_update is not None
 
 
-async def test_coordinator_empty_cfs_populated_mfs(hass: HomeAssistant) -> None:
-    """Test populated MFS with empty CFS succeeds."""
+async def test_coordinator_cfs_only_in_feed(hass: HomeAssistant) -> None:
+    """Test feed with only CFS records yields zero MFS count."""
     coordinator = _setup_coordinator(
         hass,
-        cfs_return=[],
-        mfs_return=_mfs_attributes_records("mfs_valid_multiple.json"),
+        ims_return=[ims_cfs_record(ident="CFS1")],
+    )
+
+    await coordinator.async_refresh()
+
+    assert len(coordinator.data.cfs_incidents) == 1
+    assert coordinator.data.mfs_incidents == []
+    assert coordinator.data.source_status[SOURCE_MFS_CURRENT_INCIDENTS].raw_count == 0
+
+
+async def test_coordinator_mfs_only_in_feed(hass: HomeAssistant) -> None:
+    """Test feed with only MFS records yields zero CFS count."""
+    coordinator = _setup_coordinator(
+        hass,
+        ims_return=[ims_mfs_record(ident="MFS1")],
     )
 
     await coordinator.async_refresh()
 
     assert coordinator.data.cfs_incidents == []
-    assert len(coordinator.data.mfs_incidents) == 2
+    assert len(coordinator.data.mfs_incidents) == 1
 
 
-async def test_coordinator_populated_cfs_empty_mfs(hass: HomeAssistant) -> None:
-    """Test populated CFS with empty MFS succeeds."""
-    coordinator = _setup_coordinator(
-        hass,
-        cfs_return=load_json_fixture("cfs_valid_multiple.json"),
-        mfs_return=[],
-    )
-
-    await coordinator.async_refresh()
-
-    assert len(coordinator.data.cfs_incidents) == 2
-    assert coordinator.data.mfs_incidents == []
-
-
-async def test_coordinator_malformed_records_within_sources(
+async def test_coordinator_malformed_and_unknown_authority_records(
     hass: HomeAssistant,
 ) -> None:
-    """Test malformed records in each source are skipped independently."""
+    """Test malformed and unknown-authority records are skipped."""
     coordinator = _setup_coordinator(
         hass,
-        cfs_return=[
-            *load_json_fixture("cfs_valid_single.json"),
-            {"Type": "Grass Fire"},
-        ],
-        mfs_return=_mfs_attributes_records("mfs_mixed_valid_invalid_features.json"),
+        ims_return=load_ims_attribute_records("ims_mixed_valid_invalid_features.json"),
     )
 
     await coordinator.async_refresh()
 
     assert len(coordinator.data.cfs_incidents) == 1
     assert len(coordinator.data.mfs_incidents) == 1
-    assert (
-        coordinator.data.source_status[SOURCE_CFS_CURRENT_INCIDENTS].skipped_count == 1
-    )
-    assert (
-        coordinator.data.source_status[SOURCE_MFS_CURRENT_INCIDENTS].skipped_count == 1
-    )
+    ims_status = coordinator.data.source_status[SOURCE_IMS_CURRENT_INCIDENTS]
+    assert ims_status.skipped_count >= 2
 
 
 async def test_coordinator_classifies_local_incident(hass: HomeAssistant) -> None:
     """Test an incident near the HA location is classified as local."""
     coordinator = _setup_coordinator(
         hass,
-        cfs_return=[
-            {
-                "IncidentNo": "LOCAL1",
-                "Date": "30/08/2026",
-                "Time": "14:30",
-                "Type": "Grass Fire",
-                "Status": "GOING",
-                "Location": "-34.95,138.60",
-            }
+        ims_return=[
+            ims_cfs_record(
+                ident="LOCAL1",
+                lat=-34.95,
+                long=138.60,
+                location="LOCAL",
+            )
         ],
     )
 
@@ -272,7 +210,13 @@ async def test_coordinator_classifies_regional_incident(hass: HomeAssistant) -> 
     """Test an incident within regional radius is classified as regional."""
     coordinator = _setup_coordinator(
         hass,
-        cfs_return=load_json_fixture("cfs_valid_single.json"),
+        ims_return=[
+            ims_cfs_record(
+                ident="REG1",
+                lat=-35.1234,
+                long=139.5678,
+            )
+        ],
     )
 
     await coordinator.async_refresh()
@@ -286,15 +230,12 @@ async def test_coordinator_retains_outside_radius_in_all(hass: HomeAssistant) ->
     """Test distant incidents remain in incidents_all but not relevant sets."""
     coordinator = _setup_coordinator(
         hass,
-        cfs_return=[
-            {
-                "IncidentNo": "FAR1",
-                "Date": "30/08/2026",
-                "Time": "14:30",
-                "Type": "Grass Fire",
-                "Status": "GOING",
-                "Location": "-37.831,140.779",
-            }
+        ims_return=[
+            ims_cfs_record(
+                ident="FAR1",
+                lat=-37.831,
+                long=140.779,
+            )
         ],
     )
 
@@ -311,15 +252,8 @@ async def test_coordinator_non_spatial_incident_non_relevant(
     """Test non-spatial incidents are retained but not geographically relevant."""
     coordinator = _setup_coordinator(
         hass,
-        cfs_return=[
-            {
-                "IncidentNo": "NOCOORD",
-                "Date": "30/08/2026",
-                "Time": "14:30",
-                "Type": "Grass Fire",
-                "Status": "GOING",
-                "Location": "invalid",
-            }
+        ims_return=[
+            ims_cfs_record(ident="NOCOORD", lat="invalid", long="invalid"),
         ],
     )
 
@@ -337,23 +271,9 @@ async def test_coordinator_nearest_incident_from_relevant_only(
     """Test nearest incident ignores outside-radius and non-spatial incidents."""
     coordinator = _setup_coordinator(
         hass,
-        cfs_return=[
-            {
-                "IncidentNo": "LOCAL1",
-                "Date": "30/08/2026",
-                "Time": "14:30",
-                "Type": "Grass Fire",
-                "Status": "GOING",
-                "Location": "-34.95,138.60",
-            },
-            {
-                "IncidentNo": "FAR1",
-                "Date": "30/08/2026",
-                "Time": "14:30",
-                "Type": "Grass Fire",
-                "Status": "GOING",
-                "Location": "-37.831,140.779",
-            },
+        ims_return=[
+            ims_cfs_record(ident="LOCAL1", lat=-34.95, long=138.60),
+            ims_cfs_record(ident="FAR1", lat=-37.831, long=140.779),
         ],
     )
 
@@ -379,15 +299,8 @@ async def test_coordinator_exact_local_boundary(hass: HomeAssistant) -> None:
 
     coordinator = _setup_coordinator(
         hass,
-        cfs_return=[
-            {
-                "IncidentNo": "BOUNDARY",
-                "Date": "30/08/2026",
-                "Time": "14:30",
-                "Type": "Grass Fire",
-                "Status": "GOING",
-                "Location": f"{target_lat},{target_lon}",
-            }
+        ims_return=[
+            ims_cfs_record(ident="BOUNDARY", lat=target_lat, long=target_lon),
         ],
     )
 
@@ -404,16 +317,7 @@ async def test_coordinator_uses_hass_config_location(hass: HomeAssistant) -> Non
 
     coordinator = _setup_coordinator(
         hass,
-        cfs_return=[
-            {
-                "IncidentNo": "HOME",
-                "Date": "30/08/2026",
-                "Time": "14:30",
-                "Type": "Grass Fire",
-                "Status": "GOING",
-                "Location": "-35.0,139.0",
-            }
-        ],
+        ims_return=[ims_cfs_record(ident="HOME", lat=-35.0, long=139.0)],
     )
 
     await coordinator.async_refresh()
@@ -429,46 +333,18 @@ async def test_coordinator_missing_home_location_fails(hass: HomeAssistant) -> N
     hass.config.longitude = None
     coordinator = _setup_coordinator(
         hass,
-        cfs_return=load_json_fixture("cfs_valid_single.json"),
+        ims_return=[ims_cfs_record(ident="CFS1")],
     )
 
     with pytest.raises(UpdateFailed, match="Home Assistant location is not configured"):
         await coordinator._async_update_data()
 
 
-async def test_coordinator_partial_failure_still_applies_geography(
-    hass: HomeAssistant,
-) -> None:
-    """Test geography is applied to incidents from the successful source."""
-    coordinator = _setup_coordinator(
-        hass,
-        cfs_return=load_json_fixture("cfs_valid_single.json"),
-        mfs_side_effect=SaEmergencyApiError("MFS unavailable"),
-    )
-
-    await coordinator.async_refresh()
-
-    assert len(coordinator.data.incidents_regional) == 1
-    assert coordinator.data.mfs_incidents == []
-    assert (
-        coordinator.data.source_status[SOURCE_MFS_CURRENT_INCIDENTS].status
-        == SOURCE_STATUS_ERROR
-    )
-
-
 async def test_coordinator_only_non_spatial_incidents(hass: HomeAssistant) -> None:
     """Test successful update with only non-spatial incidents."""
     coordinator = _setup_coordinator(
         hass,
-        cfs_return=[
-            {
-                "IncidentNo": "NOCOORD",
-                "Date": "30/08/2026",
-                "Time": "14:30",
-                "Type": "Grass Fire",
-                "Status": "GOING",
-            }
-        ],
+        ims_return=[ims_cfs_record(ident="NOCOORD", lat=None, long=None)],
     )
 
     await coordinator.async_refresh()
@@ -485,7 +361,7 @@ async def test_coordinator_custom_radii_alter_classification(
     """Test configured radii change relevance classification."""
     coordinator = _setup_coordinator(
         hass,
-        cfs_return=load_json_fixture("cfs_valid_single.json"),
+        ims_return=[ims_cfs_record(ident="REG1", lat=-35.1234, long=139.5678)],
         options={
             CONF_LOCAL_RADIUS_KM: 200.0,
             CONF_REGIONAL_RADIUS_KM: 250.0,
@@ -512,74 +388,63 @@ async def test_coordinator_custom_scan_interval(hass: HomeAssistant) -> None:
     assert coordinator.update_interval == timedelta(seconds=300)
 
 
-async def test_coordinator_disabled_cfs_skips_api_call(hass: HomeAssistant) -> None:
-    """Test disabled CFS source is not fetched."""
-    cfs_mock = AsyncMock(return_value=load_json_fixture("cfs_valid_single.json"))
+async def test_coordinator_disabled_cfs_filters_after_single_fetch(
+    hass: HomeAssistant,
+) -> None:
+    """Test disabled CFS still uses one IMS fetch but excludes CFS incidents."""
+    ims_mock = AsyncMock(
+        return_value=load_ims_attribute_records("ims_combined_features.json")
+    )
     coordinator = _setup_coordinator(
         hass,
-        mfs_return=_mfs_attributes_records("mfs_valid_single.json"),
         options={CONF_INCLUDE_CFS: False, CONF_INCLUDE_MFS: True},
     )
-    coordinator.api.async_get_cfs_incidents = cfs_mock  # type: ignore[method-assign]
+    coordinator.api.async_get_ims_incidents = ims_mock  # type: ignore[method-assign]
 
     await coordinator.async_refresh()
 
-    cfs_mock.assert_not_called()
+    ims_mock.assert_called_once()
     assert (
         coordinator.data.source_status[SOURCE_CFS_CURRENT_INCIDENTS].status
         == SOURCE_STATUS_DISABLED
     )
     assert len(coordinator.data.mfs_incidents) == 1
+    assert coordinator.data.cfs_incidents == []
 
 
-async def test_coordinator_disabled_mfs_skips_api_call(hass: HomeAssistant) -> None:
-    """Test disabled MFS source is not fetched."""
-    mfs_mock = AsyncMock(return_value=_mfs_attributes_records("mfs_valid_single.json"))
+async def test_coordinator_disabled_mfs_filters_after_single_fetch(
+    hass: HomeAssistant,
+) -> None:
+    """Test disabled MFS still uses one IMS fetch but excludes MFS incidents."""
+    ims_mock = AsyncMock(
+        return_value=load_ims_attribute_records("ims_combined_features.json")
+    )
     coordinator = _setup_coordinator(
         hass,
-        cfs_return=load_json_fixture("cfs_valid_single.json"),
         options={CONF_INCLUDE_CFS: True, CONF_INCLUDE_MFS: False},
     )
-    coordinator.api.async_get_mfs_incidents = mfs_mock  # type: ignore[method-assign]
+    coordinator.api.async_get_ims_incidents = ims_mock  # type: ignore[method-assign]
 
     await coordinator.async_refresh()
 
-    mfs_mock.assert_not_called()
+    ims_mock.assert_called_once()
     assert (
         coordinator.data.source_status[SOURCE_MFS_CURRENT_INCIDENTS].status
         == SOURCE_STATUS_DISABLED
     )
+    assert len(coordinator.data.cfs_incidents) == 1
+    assert coordinator.data.mfs_incidents == []
 
 
 async def test_coordinator_only_enabled_source_failure_fails(
     hass: HomeAssistant,
 ) -> None:
-    """Test failure of the only enabled source fails the update."""
+    """Test failure of the IMS feed fails the update when only CFS is enabled."""
     coordinator = _setup_coordinator(
         hass,
-        cfs_side_effect=SaEmergencyApiError("CFS unavailable"),
+        ims_side_effect=SaEmergencyApiError("IMS unavailable"),
         options={CONF_INCLUDE_CFS: True, CONF_INCLUDE_MFS: False},
     )
 
     with pytest.raises(UpdateFailed):
         await coordinator._async_update_data()
-
-
-async def test_coordinator_disabled_source_not_counted_in_partial_failure(
-    hass: HomeAssistant,
-) -> None:
-    """Test disabled sources are excluded from all-enabled-sources-failed logic."""
-    coordinator = _setup_coordinator(
-        hass,
-        cfs_return=load_json_fixture("cfs_valid_single.json"),
-        mfs_side_effect=SaEmergencyApiError("MFS unavailable"),
-        options={CONF_INCLUDE_CFS: True, CONF_INCLUDE_MFS: False},
-    )
-
-    await coordinator.async_refresh()
-
-    assert len(coordinator.data.cfs_incidents) == 1
-    assert (
-        coordinator.data.source_status[SOURCE_MFS_CURRENT_INCIDENTS].status
-        == SOURCE_STATUS_DISABLED
-    )

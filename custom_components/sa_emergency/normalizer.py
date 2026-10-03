@@ -11,8 +11,11 @@ from zoneinfo import ZoneInfo
 from .const import (
     AGENCY_CFS,
     AGENCY_MFS,
+    IMS_AUTHORITY_CFS,
+    IMS_AUTHORITY_MFS,
     SA_TIMEZONE,
     SOURCE_CFS_CURRENT_INCIDENTS,
+    SOURCE_IMS_CURRENT_INCIDENTS,
     SOURCE_MFS_CURRENT_INCIDENTS,
 )
 from .models import Incident
@@ -30,12 +33,121 @@ _MFS_DATETIME_FORMATS = (
 )
 
 
-def normalize_cfs_incident(record: dict[str, Any]) -> Incident | None:
-    """Normalize one CFS current incident record.
+def classify_ims_agency(authority: Any) -> str | None:
+    """Map an IMS authority string to a normalized agency code."""
+    authority_str = _optional_str(authority)
+    if authority_str is None:
+        return None
 
-    Returns None only when the record cannot produce a stable incident identity.
-    Incidents with missing or invalid coordinates are retained with latitude and
-    longitude set to None so later geography processing can treat them as non-spatial.
+    normalized = authority_str.casefold()
+    if normalized == IMS_AUTHORITY_CFS.casefold():
+        return AGENCY_CFS
+    if normalized == IMS_AUTHORITY_MFS.casefold():
+        return AGENCY_MFS
+
+    _LOGGER.debug("Skipping IMS record with unsupported authority: %r", authority)
+    return None
+
+
+def normalize_ims_incident(record: dict[str, Any]) -> Incident | None:
+    """Normalize one IMS current incident attributes record."""
+    agency = classify_ims_agency(record.get("authority"))
+    if agency is None:
+        return None
+
+    ident = _optional_str(record.get("ident"))
+    if not ident:
+        _LOGGER.debug("Skipping IMS record without ident: %r", record)
+        return None
+
+    latitude, longitude = parse_mfs_coordinates(record)
+    first_reported = parse_ims_first_reported(record)
+
+    return Incident(
+        incident_id=f"{agency}:{ident}",
+        agency=agency,
+        source=SOURCE_IMS_CURRENT_INCIDENTS,
+        incident_type=_optional_str(record.get("event")),
+        status=_optional_str(record.get("inc_status")),
+        level=parse_ims_level(record.get("inc_level")),
+        first_reported=first_reported,
+        location_name=parse_ims_location_name(record),
+        latitude=latitude,
+        longitude=longitude,
+        region=None,
+        fire_ban_district=_optional_str(record.get("fbd")),
+        resources=None,
+        aircraft_count=None,
+        message=parse_ims_message(record),
+        message_url=_optional_str(record.get("web")),
+    )
+
+
+def parse_ims_location_name(record: dict[str, Any]) -> str | None:
+    """Return the best available IMS location label."""
+    return _optional_str(record.get("location")) or _optional_str(
+        record.get("inc_name")
+    )
+
+
+def parse_ims_message(record: dict[str, Any]) -> str | None:
+    """Return concise operational text from IMS fields."""
+    for key in ("incs", "headline", "title", "instruct"):
+        value = _optional_str(record.get(key))
+        if value is not None:
+            return value
+    return None
+
+
+def parse_ims_level(value: Any) -> str | None:
+    """Convert IMS inc_level values to a normalized string."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        if value.is_integer():
+            return str(int(value))
+        return None
+    if isinstance(value, str):
+        stripped = value.strip()
+        return stripped or None
+    return str(value).strip() or None
+
+
+def parse_ims_first_reported(record: dict[str, Any]) -> datetime | None:
+    """Parse IMS effective/sent/updated epoch millisecond timestamps."""
+    for key in ("effective", "sent", "updated"):
+        parsed = parse_ims_epoch_milliseconds(record.get(key))
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def parse_ims_epoch_milliseconds(value: Any) -> datetime | None:
+    """Parse IMS epoch millisecond values into a timezone-aware datetime."""
+    if value is None or isinstance(value, bool):
+        return None
+
+    try:
+        milliseconds = int(value)
+    except (TypeError, ValueError):
+        return None
+
+    if milliseconds <= 0:
+        return None
+
+    from datetime import UTC
+
+    return datetime.fromtimestamp(milliseconds / 1000, tz=UTC)
+
+
+def normalize_cfs_incident(record: dict[str, Any]) -> Incident | None:
+    """Normalize one legacy CFS JSON incident record.
+
+    Retained for regression tests only; production uses the IMS feed.
     """
     incident_no = _optional_str(record.get("IncidentNo"))
     if not incident_no:
@@ -66,9 +178,9 @@ def normalize_cfs_incident(record: dict[str, Any]) -> Incident | None:
 
 
 def normalize_mfs_incident(record: dict[str, Any]) -> Incident | None:
-    """Normalize one MFS ArcGIS incident attributes record.
+    """Normalize one legacy MFS ArcGIS incident record.
 
-    Returns None only when the record cannot produce a stable incident identity.
+    Retained for regression tests only; production uses the IMS feed.
     """
     incident_id_value = record.get("id")
     if incident_id_value is None or incident_id_value == "":

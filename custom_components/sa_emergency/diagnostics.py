@@ -10,14 +10,14 @@ from homeassistant.helpers.redact import async_redact_data
 from homeassistant.loader import async_get_integration
 
 from .const import (
-    CFS_INCIDENTS_URL,
     CONF_INCLUDE_CFS,
     CONF_INCLUDE_MFS,
     CONF_LOCAL_RADIUS_KM,
     CONF_REGIONAL_RADIUS_KM,
     DOMAIN,
-    MFS_INCIDENTS_URL,
+    IMS_INCIDENTS_URL,
     SOURCE_CFS_CURRENT_INCIDENTS,
+    SOURCE_IMS_CURRENT_INCIDENTS,
     SOURCE_MFS_CURRENT_INCIDENTS,
 )
 from .coordinator import SaEmergencyDataUpdateCoordinator
@@ -58,6 +58,7 @@ def _build_diagnostics_payload(
     options = coordinator.options
     data = coordinator.data
 
+    ims_status = data.source_status.get(SOURCE_IMS_CURRENT_INCIDENTS)
     cfs_status = data.source_status.get(SOURCE_CFS_CURRENT_INCIDENTS)
     mfs_status = data.source_status.get(SOURCE_MFS_CURRENT_INCIDENTS)
 
@@ -74,14 +75,14 @@ def _build_diagnostics_payload(
             CONF_INCLUDE_MFS: options.include_mfs,
         },
         "sources": {
-            "cfs": {
-                **source_status_to_public_dict(cfs_status),
-                "url": CFS_INCIDENTS_URL,
+            "ims_incidents": {
+                **source_status_to_public_dict(ims_status),
+                "url": IMS_INCIDENTS_URL,
+                "cfs_count": len(data.cfs_incidents),
+                "mfs_count": len(data.mfs_incidents),
             },
-            "mfs": {
-                **source_status_to_public_dict(mfs_status),
-                "url": MFS_INCIDENTS_URL,
-            },
+            "cfs": source_status_to_public_dict(cfs_status),
+            "mfs": source_status_to_public_dict(mfs_status),
         },
         "incidents": {
             "total_source": len(data.incidents_all),

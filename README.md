@@ -6,7 +6,7 @@ SA Emergency is a [Home Assistant](https://www.home-assistant.io/) custom integr
 
 This release is suitable for **initial trial installation** through HACS custom repository or manual install. It is an independent community project and must not be treated as an official emergency-warning system.
 
-Current version: `0.6.0`
+Current version: `0.6.1`
 
 ## What it does
 
@@ -26,8 +26,9 @@ This integration consumes public government data only. It is **not affiliated wi
 
 | Agency | Authoritative source |
 | --- | --- |
-| CFS current incidents | `https://data.eso.sa.gov.au/prod/cfs/criimson/cfs_current_incidents.json` |
-| MFS current incidents | `https://cfs.geohub.sa.gov.au/server/rest/services/CFS_Incident_Read/MFS_Incidents/FeatureServer/0/query` |
+| Current CFS and MFS incidents (combined IMS feed, same public source as the [official CFS map](https://apps.geohub.sa.gov.au/CFSMap/index.html)) | `https://cfs-feeds.geohub.sa.gov.au/FL/IMS_Read/SACFS_and_SAMFS_Incidents_and_Incident_Updates/FeatureServer/1/query` |
+
+This is the public GeoHub IMS layer used by the official map today. It is not a formally documented API contract; availability and field shapes may change.
 
 No API credentials are required.
 

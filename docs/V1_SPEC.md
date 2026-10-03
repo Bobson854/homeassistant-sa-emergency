@@ -12,11 +12,10 @@ This document describes the **planned V1 architecture and behaviour**. Implement
 | --- | --- |
 | Integration discovery and manifest | Implemented (Milestone 1) |
 | Config Flow (single instance, HA location) | Implemented (Milestone 1) |
-| CFS current incidents API client | Implemented (Milestone 2) |
-| CFS normalization to `Incident` model | Implemented (Milestone 2) |
-| MFS current incidents API client | Implemented (Milestone 3) |
-| MFS normalization to `Incident` model | Implemented (Milestone 3) |
-| Multi-source coordinator with partial failure handling | Implemented (Milestone 3) |
+| Combined IMS current incidents API client (CFS + MFS) | Implemented (0.6.1) |
+| IMS normalization to `Incident` model | Implemented (0.6.1) |
+| Legacy CFS JSON / separate MFS normalizers (tests) | Retained internally |
+| Single-source coordinator (combined IMS feed) | Implemented (0.6.1) |
 | Distance, bearing, cardinal direction | Implemented (Milestone 4) |
 | Local/regional relevance classification | Implemented (Milestone 4) |
 | Geographic incident collections and sorting | Implemented (Milestone 4) |
@@ -44,7 +43,7 @@ This document describes the **planned V1 architecture and behaviour**. Implement
   * `incident_name` → `message` when it differs from `name` (shorter area label, e.g. `EVANSTON GARDENS`)
   * if `name` is absent, `incident_name` is used as `location_name`
 * MFS-only fields such as `resources`, `fire_ban_district`, `level`, and `message_url` remain `None`.
-* Coordinator partial failure behaviour: one agency source may fail while the other succeeds; overall update fails only when both sources fail.
+* As of **0.6.1**, CFS and MFS current incidents share one combined IMS ArcGIS query; coordinator refresh fails when that upstream request fails. Per-agency `include_cfs` / `include_mfs` options filter normalized results after a single fetch.
 * `Incident.source` must be supplied explicitly by each normalizer; there is no CFS default on the model.
 
 ### Milestone 4 implementation notes
@@ -125,52 +124,35 @@ V1 should be designed so warning support can be added next without restructuring
 
 # 3. Authoritative V1 Sources
 
-## CFS
+## Combined IMS current incidents (production, 0.6.1+)
 
-Primary feed:
+Primary feed (public GeoHub IMS layer used by the [official CFS map](https://apps.geohub.sa.gov.au/CFSMap/index.html)):
 
-`https://data.eso.sa.gov.au/prod/cfs/criimson/cfs_current_incidents.json`
+`https://cfs-feeds.geohub.sa.gov.au/FL/IMS_Read/SACFS_and_SAMFS_Incidents_and_Incident_Updates/FeatureServer/1/query`
 
-Useful source fields include:
+Query parameters: `where=1=1`, `outFields=*`, `returnGeometry=false`, `f=json`.
 
-* `IncidentNo`
-* `Date`
-* `Time`
-* `Message`
-* `Message_link`
-* `Location_name`
-* `Region`
-* `Type`
-* `Status`
-* `Level`
-* `FBD`
-* `Resources`
-* `Aircraft`
-* `Location`
+This is the current public data source consumed by the official map. It is not a formally guaranteed API contract.
 
-The CFS JSON feed is preferred over the CFS ArcGIS incident layer for normal polling because it currently exposes useful operational fields including resources and FBD.
+Useful IMS attribute fields include:
 
-## MFS
+* `ident` (stable public incident identifier; prefixed by agency in the normalized model)
+* `authority` (agency classification: CFS vs MFS)
+* `event`, `inc_status`, `inc_level`
+* `effective`, `sent`, `updated` (epoch milliseconds for timestamps)
+* `location`, `inc_name`, `fbd`, `web`, `incs`, `headline`, `title`, `instruct`
+* `lat`, `long`
 
-Primary feed:
+Agency is derived from `authority`:
 
-`https://cfs.geohub.sa.gov.au/server/rest/services/CFS_Incident_Read/MFS_Incidents/FeatureServer/0/query`
+* `South Australian Country Fire Service` → CFS
+* `South Australian Metropolitan Fire Service` → MFS
 
-Expected fields include:
+Records with unknown authorities are skipped. `resources`, `aircraft`, and `region` are not currently mapped from IMS and remain `None` in the normalized model.
 
-* `id`
-* `incident_name`
-* `name`
-* `first_report`
-* `status`
-* `region`
-* `aircraft`
-* `icon`
-* `long`
-* `lat`
-* `event`
+## Legacy parsers (internal / regression tests only)
 
-MFS incidents should be converted into the same internal incident model as CFS incidents.
+Legacy CFS JSON and separate MFS FeatureServer parsers remain for historical test coverage. They are **not** used for production polling after 0.6.1. The legacy CFS JSON endpoint currently returns HTML “File Unavailable” and must not be used as a runtime fallback.
 
 ---
 
@@ -518,23 +500,9 @@ Recommended allowed range:
 60–900 seconds
 ```
 
-One coordinator refresh should fetch all enabled V1 incident sources.
+One coordinator refresh performs a single combined IMS incident fetch when at least one agency is enabled.
 
-A failure of one source should not necessarily destroy useful information from the other source.
-
-Example:
-
-```text
-CFS successful
-MFS failed
-```
-
-Result:
-
-* retain/display valid CFS data;
-* mark MFS source as unavailable/stale internally;
-* log the MFS problem;
-* avoid marking the entire integration unavailable unless no useful current data can be obtained.
+If the IMS request fails, the coordinator refresh fails (no silent zero-incident success). Per-agency `include_cfs` / `include_mfs` options filter normalized results after a successful fetch; disabled agencies are not fetched separately.
 
 The coordinator should avoid overlapping refreshes.
 
@@ -891,12 +859,13 @@ CFSClient
 MFSClient
 ```
 
-or one client with clearly separated methods:
+Production polling (0.6.1+):
 
 ```python
-async def async_get_cfs_incidents()
-async def async_get_mfs_incidents()
+async def async_get_ims_incidents()
 ```
+
+Legacy CFS/MFS parsers may remain for regression tests only.
 
 API code should return source records.
 

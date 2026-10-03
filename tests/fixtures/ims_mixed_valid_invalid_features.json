@@ -1,0 +1,43 @@
+{
+  "features": [
+    {
+      "attributes": {
+        "ident": "F2610030053",
+        "authority": "South Australian Country Fire Service",
+        "event": "Grass Fire",
+        "inc_status": "GOING",
+        "effective": 1791006922000,
+        "lat": -35.124724,
+        "long": 138.558058
+      }
+    },
+    "not-a-feature",
+    {
+      "attributes": {
+        "authority": "South Australian Country Fire Service",
+        "event": "Grass Fire"
+      }
+    },
+    {
+      "attributes": {
+        "ident": "F2608270132",
+        "authority": "South Australian Metropolitan Fire Service",
+        "event": "Structure Fire",
+        "inc_status": "GOING",
+        "effective": 1787831280000,
+        "lat": -34.831308,
+        "long": 138.712425
+      }
+    },
+    {
+      "attributes": {
+        "ident": "UNKNOWN1",
+        "authority": "Unknown Emergency Service",
+        "event": "Grass Fire",
+        "effective": 1791006922000,
+        "lat": -35.0,
+        "long": 138.0
+      }
+    }
+  ]
+}
