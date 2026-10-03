@@ -1,5 +1,7 @@
 """Tests for the SA Emergency options flow."""
 
+from unittest.mock import AsyncMock
+
 from homeassistant.const import CONF_SCAN_INTERVAL
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -44,8 +46,12 @@ async def test_options_flow_defaults(hass) -> None:
     assert _options_schema(entry) is not None
 
 
-async def test_options_flow_valid_save(hass) -> None:
-    """Test valid options are saved."""
+async def test_options_flow_valid_save(
+    hass,
+    mock_config_entry_reload: AsyncMock,
+    assert_no_ims_network: AsyncMock,
+) -> None:
+    """Test valid options are saved and trigger a config-entry reload."""
     entry = _configured_entry()
     entry.add_to_hass(hass)
 
@@ -64,6 +70,10 @@ async def test_options_flow_valid_save(hass) -> None:
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.options[CONF_LOCAL_RADIUS_KM] == 30
     assert entry.options[CONF_INCLUDE_MFS] is False
+
+    await hass.async_block_till_done()
+    mock_config_entry_reload.assert_awaited_once_with(entry.entry_id)
+    assert_no_ims_network.assert_not_awaited()
 
 
 async def test_options_flow_shows_current_values(hass) -> None:
