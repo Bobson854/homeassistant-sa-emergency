@@ -54,6 +54,16 @@ Use this checklist before tagging a release of SA Emergency.
 - [ ] Restart Home Assistant if prompted
 - [ ] Complete UI setup and options configuration
 
+## HACS brand validation (outstanding)
+
+HACS validation currently expects `custom_components/sa_emergency/brand/icon.png` and/or registration in the [Home Assistant Brands](https://github.com/home-assistant/brands) repository.
+
+- [ ] **Do not** use CFS, MFS, SAFECOM, or SA Government official logos without clear permission.
+- [ ] Create an original **SA Emergency** icon (or complete Brands registration) before expecting a clean HACS brands check.
+- [ ] Until then, treat HACS brand/icon failures as **known and documented** — not a blocker for custom-repository trial installs after a GitHub Release.
+
+No placeholder icon should be added solely to silence validation.
+
 ## Default HACS catalogue (future, not required for first trial)
 
 - [ ] Passing HACS action without ignores
