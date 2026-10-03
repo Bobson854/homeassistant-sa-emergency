@@ -17,9 +17,8 @@ Use this checklist before tagging a release of SA Emergency.
 - [ ] Options Flow saves and reloads radii, polling interval, and agency toggles
 - [ ] All seven V1 sensors appear under the SA Emergency device
 - [ ] Primary Incidents sensor exposes structured `incidents` attributes
-- [ ] CFS live source returns normalized incidents
-- [ ] MFS live source returns normalized incidents
-- [ ] Partial source failure retains data from the successful enabled source
+- [ ] Combined IMS live feed returns normalized CFS and MFS incidents
+- [ ] IMS upstream failure fails refresh clearly (no silent empty success)
 - [ ] Disabled agency sensors remain present with `disabled` source status
 - [ ] Diagnostics download succeeds and contains no home latitude/longitude
 
@@ -42,8 +41,8 @@ Use this checklist before tagging a release of SA Emergency.
 2. Commit and push release-prep changes.
 3. Create and push an annotated tag, for example:
    ```bash
-   git tag -a v0.6.0 -m "SA Emergency 0.6.0"
-   git push origin v0.6.0
+   git tag -a v0.6.1 -m "SA Emergency 0.6.1"
+   git push origin v0.6.1
    ```
 4. Create a **GitHub Release** from the tag (required for reliable HACS custom-repository installs).
 5. Install through HACS custom repository and repeat the manual validation steps above.

@@ -1,175 +1,189 @@
 # SA Emergency
 
-**V1 Preview / Initial Testing**
+**V1 preview — early public testing** (version `0.6.1`)
 
-SA Emergency is a [Home Assistant](https://www.home-assistant.io/) custom integration that provides location-aware South Australian emergency **current incident** information from official public CFS and MFS feeds.
+SA Emergency is a [Home Assistant](https://www.home-assistant.io/) custom integration for location-aware **CFS** and **MFS** incident information across South Australia. It periodically refreshes current incidents from public feeds, compares them with your Home Assistant home location, and exposes counts and structured details as sensors for dashboards, templates, notifications, and automations.
 
-This release is suitable for **initial trial installation** through HACS custom repository or manual install. It is an independent community project and must not be treated as an official emergency-warning system.
+This is an **independent community project**. It is **not** an official CFS or MFS product and **not** a substitute for official emergency warnings. Use official emergency-service channels for safety decisions.
 
-Current version: `0.6.1`
+## At a glance
 
-## What it does
+- Monitors **current** CFS and MFS incidents (one combined public feed; see [Source behaviour](#source--data-behaviour)).
+- Uses your **Home Assistant configured latitude/longitude** locally for distance, bearing, and relevance — coordinates are **not** sent to the upstream feed.
+- Classifies incidents as **local**, **regional**, or outside your configured radii.
+- Exposes **seven stable sensors** plus normalized incident attributes on the primary Incidents sensor.
+- Runs entirely inside Home Assistant — **no** external database or companion service required.
 
-- Polls official **CFS** and **MFS** current incident feeds
-- Normalizes incidents into a common internal model
-- Calculates distance, bearing, and local/regional relevance from your configured **Home Assistant location**
-- Exposes seven stable V1 sensors and structured incident attributes for dashboards and automations
-- Tolerates partial source failure when multiple agencies are enabled
+**Not in V1:** CFS public warnings, warning polygons, paging/scanner feeds, incident history, or dedicated aircraft tracking.
 
-**Not included in V1:** CFS public warnings, warning polygons, aviation enrichment, notifications, or incident history.
+Technical details: [docs/V1_SPEC.md](docs/V1_SPEC.md)
 
-See [docs/V1_SPEC.md](docs/V1_SPEC.md) for the full specification.
+## Who is this for?
 
-## Data sources
+This integration may be useful if you:
 
-This integration consumes public government data only. It is **not affiliated with, sponsored by, or endorsed by** CFS, MFS, SAFECOM, the South Australian Government, or Home Assistant.
+- run Home Assistant in **South Australia**;
+- want **current** CFS/MFS incidents as Home Assistant entities;
+- prefer **distance and relevance filtering** over a statewide raw list;
+- want incident data for **dashboards, notifications, templates, or automations**.
 
-| Agency | Authoritative source |
-| --- | --- |
-| Current CFS and MFS incidents (combined IMS feed, same public source as the [official CFS map](https://apps.geohub.sa.gov.au/CFSMap/index.html)) | `https://cfs-feeds.geohub.sa.gov.au/FL/IMS_Read/SACFS_and_SAMFS_Incidents_and_Incident_Updates/FeatureServer/1/query` |
+It is **not**:
 
-This is the public GeoHub IMS layer used by the official map today. It is not a formally documented API contract; availability and field shapes may change.
-
-No API credentials are required.
-
-## Entities
-
-| Entity | Description |
-| --- | --- |
-| `sensor.sa_emergency_incidents` | Count of relevant incidents with structured `incidents` attributes |
-| `sensor.sa_emergency_local_incidents` | Count of local incidents |
-| `sensor.sa_emergency_regional_incidents` | Count of regional incidents (excluding local) |
-| `sensor.sa_emergency_nearest_incident` | Nearest relevant incident |
-| `sensor.sa_emergency_highest_relevance` | Highest current relevance (`none`, `regional`, `local`) |
-| `sensor.sa_emergency_cfs_incidents` | Count of relevant CFS incidents |
-| `sensor.sa_emergency_mfs_incidents` | Count of relevant MFS incidents |
-
-### Relevance defaults
-
-| Setting | Default |
-| --- | --- |
-| Local radius | 25 km |
-| Regional radius | 100 km |
-| Polling interval | 180 seconds |
-| Include CFS | enabled |
-| Include MFS | enabled |
-
-Configure these via **Settings → Devices & services → SA Emergency → Configure**.
-
-### Example `incidents` attribute
-
-```yaml
-incidents:
-  - incident_id: "CFS:123456"
-    agency: "CFS"
-    type: "Grass Fire"
-    status: "GOING"
-    location: "MONARTO, OLD PRINCES HIGHWAY"
-    distance_km: 81.2
-    bearing_degrees: 94
-    bearing: "E"
-    relevance: "regional"
-    first_reported: "2026-08-30T14:30:00+09:30"
-incidents_exposed: 1
-incidents_truncated: false
-```
-
-The primary sensor state always reflects the **full** relevant count. When more than 50 relevant incidents exist, the `incidents` attribute list is capped at 50 sorted incidents and `incidents_truncated` is set to `true`.
+- a paging or scanner feed;
+- a replacement for **official CFS warnings** or emergency alerts;
+- a **historical** incident archive;
+- an aircraft or aviation enrichment service (those fields appear only when the upstream feed supplies them).
 
 ## Installation
 
-A **GitHub Release** is required for reliable HACS custom-repository installation. See [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md) for the maintainer release process.
+A **GitHub Release** tag helps HACS custom-repository installs resolve the correct version. See [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md) for maintainers.
 
 ### HACS custom repository
 
-1. Open **HACS**.
-2. Open the **Integrations** section menu (top right) and choose **Custom repositories**.
-3. Add repository URL: `https://github.com/Bobson854/homeassistant-sa-emergency`
-4. Category: **Integration**.
-5. Install **SA Emergency**.
+This integration is **not** in the default HACS catalogue. Add it as a custom repository:
+
+1. Open **HACS** → **Integrations**.
+2. Open the menu (⋮) → **Custom repositories**.
+3. Repository URL: `https://github.com/Bobson854/homeassistant-sa-emergency`
+4. Category: **Integration** → **Add**.
+5. Find **SA Emergency** in HACS → **Download**.
 6. Restart Home Assistant if prompted.
-7. Go to **Settings → Devices & services → Add integration → SA Emergency**.
-8. Open **Configure** on the integration to adjust radii, polling interval, and agency toggles.
+7. **Settings → Devices & services → Add integration → SA Emergency**.
+8. Optional: **Configure** to adjust radii, refresh interval, and CFS/MFS inclusion.
 
 ### Manual installation
 
-1. Copy the folder `custom_components/sa_emergency/` to `<Home Assistant config>/custom_components/sa_emergency/`.
+1. Copy `custom_components/sa_emergency/` to `<config>/custom_components/sa_emergency/`.
 2. Restart Home Assistant.
 3. Add the integration via **Settings → Devices & services → Add integration → SA Emergency**.
 
-## Initial setup
+## Configuration
 
-1. Ensure Home Assistant has a configured map location (**Settings → System → General → Home location**).
-2. Add the SA Emergency integration through the UI.
-3. Optionally open **Configure** to adjust local/regional radii, polling interval, or disable an agency feed.
+All setup is through the Home Assistant UI.
 
-The integration reads `hass.config.latitude` and `hass.config.longitude` locally. It does **not** ask for separate coordinates and does **not** store home coordinates in the config entry.
+| Option | Default | Notes |
+| --- | --- | --- |
+| Local radius | 25 km | Incidents within this distance are **local** |
+| Regional radius | 100 km | Beyond local, up to this distance is **regional** |
+| Update interval | 180 s | Supported range **60–900** seconds |
+| Include CFS | On | Filter after fetch; both agencies share one upstream request |
+| Include MFS | On | At least one agency must remain enabled |
 
-## Source degradation behaviour
+**Home location:** **Settings → System → General → Home location** must be set. The integration reads Home Assistant’s configured latitude and longitude **locally** only. It does not store home coordinates in the config entry or send them to the GeoHub incident feed.
 
-- If **both enabled sources fail**, the coordinator update fails.
-- If **one enabled source fails**, data from the other enabled source is retained.
-- A **deliberately disabled** source is reported as `disabled`, not as degraded availability.
-- Agency count sensors distinguish **source error** (unknown state) from a successful zero-incident result (`0`).
+## Entities
 
-## Data freshness
+| Entity | What it shows |
+| --- | --- |
+| `sensor.sa_emergency_incidents` | Count of **relevant** incidents (local + regional); structured `incidents` attributes |
+| `sensor.sa_emergency_local_incidents` | Count within the **local** radius |
+| `sensor.sa_emergency_regional_incidents` | Count **regional** only (outside local, within regional radius) |
+| `sensor.sa_emergency_nearest_incident` | Short label (type or location when available); full details in attributes |
+| `sensor.sa_emergency_highest_relevance` | `none`, `regional`, or `local` |
+| `sensor.sa_emergency_cfs_incidents` | Count of **relevant** CFS incidents |
+| `sensor.sa_emergency_mfs_incidents` | Count of **relevant** MFS incidents |
 
-Incident data is refreshed on the configured polling interval (default 180 seconds). `last_successful_update` on the primary Incidents sensor reflects the latest coordinator refresh where at least one enabled source succeeded.
+Count sensors reflect **geographically relevant** incidents, not every incident statewide.
 
-## Privacy
+When more than **50** relevant incidents exist, the primary sensor state still shows the full count, but the `incidents` attribute list is capped at 50 (sorted) and `incidents_truncated` is `true`.
 
-- Home Assistant's configured latitude and longitude are used **locally** to calculate distance and relevance.
-- Home coordinates are **not** sent to CFS or MFS endpoints.
-- Home coordinates are **not** stored in integration config entry data.
-- Home coordinates are **not** exposed in diagnostics downloads.
-- Public incident coordinates come from official public government feeds.
+## Incident attributes
 
-## Diagnostics
+The primary Incidents sensor exposes a list of normalized incidents. Unavailable fields are **omitted** (not shown as zero or empty placeholders).
 
-Download diagnostics from **Settings → Devices & services → SA Emergency → Download diagnostics**.
+**Example only** — not live data:
 
-Diagnostics include integration version, resolved options, source health, aggregate incident counts, and source URLs. They do **not** include your Home Assistant home coordinates or raw source API payloads.
+```yaml
+incidents:
+  - incident_id: CFS:F2610030053
+    agency: CFS
+    type: Burn Off
+    status: Controlled
+    level: "1"
+    location: KELLYS, ONKAPARINGA HILLS
+    distance_km: 40.9
+    bearing_degrees: 270
+    bearing: W
+    relevance: regional
+    fire_ban_district: MOUNT LOFTY RANGES
+    message: F-261003-0053 Onkaparinga Hills, Kellys Rd (Rubbish Or Waste)
+    message_url: https://www.cfs.sa.gov.au/incidents
+```
 
-When reporting issues, attach diagnostics if helpful. Do **not** publish your home coordinates.
+When present, public attributes can include: `incident_id`, `agency`, `type`, `status`, `level`, `first_reported`, `location`, `latitude`, `longitude`, `distance_km`, `bearing_degrees`, `bearing`, `relevance`, `region`, `fire_ban_district`, `resources`, `aircraft`, `message`, `message_url`.
+
+## Relevance model
+
+- **Local** — distance ≤ configured local radius (default 25 km).
+- **Regional** — beyond local radius but ≤ regional radius (default 100 km).
+- **Outside regional radius** — kept in internal totals where applicable but **not** counted as relevant on the main sensors.
+- **No valid coordinates** — incident may still be ingested but cannot be geographically relevant.
+
+## Source / data behaviour
+
+SA Emergency currently uses the **public IMS incident feed** used by the [official CFS map](https://apps.geohub.sa.gov.au/CFSMap/index.html):
+
+`https://cfs-feeds.geohub.sa.gov.au/FL/IMS_Read/SACFS_and_SAMFS_Incidents_and_Incident_Updates/FeatureServer/1/query`
+
+- **One combined upstream feed** carries both CFS and MFS current incidents.
+- **Agency** is determined from each record’s authority (Country Fire Service vs Metropolitan Fire Service).
+- Data is **periodically refreshed** on your configured interval; availability depends on SA emergency-services systems.
+- This feed is **not** a formally guaranteed public API contract — fields and availability may change.
+
+No API credentials are required. Migration from older per-feed architecture is documented in [docs/V1_SPEC.md](docs/V1_SPEC.md).
 
 ## Troubleshooting
 
+If sensors are **unavailable** or counts look wrong:
+
+- Confirm Home Assistant has **internet access** and a configured **home location**.
+- Open **Settings → Devices & services → SA Emergency → Download diagnostics** — check source status, counts, and last successful update (diagnostics do **not** include your home coordinates).
+- Verify **Include CFS / Include MFS** and your **local/regional** radii — distant incidents do not appear in relevant counts.
+- Remember upstream incident data can be **temporarily unavailable**; the integration will not silently pretend a failed refresh succeeded.
+
 | Symptom | Things to check |
 | --- | --- |
-| Integration will not set up | Home Assistant home location (latitude/longitude) must be configured |
-| No incidents shown | Incidents may be outside your regional radius; increase radii in **Configure** |
-| CFS/MFS sensor unknown | That agency source may be temporarily unavailable; check `source_status` on the primary Incidents sensor |
-| One agency always zero | Confirm the agency is enabled in **Configure** and that incidents are geographically relevant |
-| Stale data | Check polling interval and whether an enabled source is in `error` state |
-| Agency sensor missing counts but integration works | Relevant count sensors report geographically relevant incidents, not all statewide incidents |
+| Integration will not set up | Home location must be configured; initial refresh needs a working upstream feed |
+| Zero relevant incidents | Incidents may be outside regional radius, or coordinates missing upstream |
+| Stale `last_successful_update` | Network or upstream outage; check diagnostics source status |
 
-## Issue reporting
+Do **not** rely on Home Assistant for emergency decision-making.
 
-Report bugs at: [https://github.com/Bobson854/homeassistant-sa-emergency/issues](https://github.com/Bobson854/homeassistant-sa-emergency/issues)
+## Limitations
 
-Include Home Assistant diagnostics where helpful.
+- **Current incidents only** — no historical database in Home Assistant.
+- **Warnings and map polygons** are not integrated in V1.
+- **`resources`**, **`aircraft`**, and **`region`** may be absent when the current IMS feed does not supply mapped equivalents.
+- Upstream **field shapes and availability** can change over time.
+- **Early public testing** — usable in live setups, but not production-grade emergency reliability.
+
+## Diagnostics
+
+**Settings → Devices & services → SA Emergency → Download diagnostics**
+
+Includes integration version, options, IMS source URL and status, aggregate incident counts, and last successful update. Does **not** include home coordinates or raw upstream payloads.
+
+Issues: [GitHub Issues](https://github.com/Bobson854/homeassistant-sa-emergency/issues) — attach diagnostics when helpful.
 
 ## Development
 
-Requirements: Python 3.12+, dependencies from `pyproject.toml`.
+Python 3.12+. See `pyproject.toml`.
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
+.venv\Scripts\activate   # Windows
 pip install -e ".[dev]"
 ruff check custom_components tests
 ruff format --check custom_components tests
 pytest
 ```
 
-CI also runs Hassfest and HACS validation via GitHub Actions.
+CI runs lint, tests, Hassfest, and HACS validation.
 
 ## Disclaimer
 
-SA Emergency is an **independent community integration**. It is **not** affiliated with or endorsed by the South Australian Country Fire Service (CFS), Metropolitan Fire Service (MFS), SAFECOM, the South Australian Government, or Home Assistant.
-
-**Do not rely on this integration as the sole source of emergency warnings or safety information.** Always follow official emergency-service warnings and instructions.
+SA Emergency is an independent Home Assistant integration and is **not** affiliated with or endorsed by the South Australian Country Fire Service, Metropolitan Fire Service, SAFECOM, or the Government of South Australia. **Do not rely on Home Assistant or this integration as your sole source of emergency warnings or safety information.** Always use official emergency-service channels.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — Copyright (c) Mark Jones. See [LICENSE](LICENSE).

@@ -6,15 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [0.6.1] - Unreleased
 
-### Changed
-
-- Migrated current incident ingestion from the legacy CFS JSON feed and separate MFS FeatureServer query to the combined GeoHub IMS incident layer used by the official CFS map (`cfs-feeds.geohub.sa.gov.au`), restoring reliable CFS incident updates.
-- Agency classification for combined feed records uses the IMS `authority` field (CFS vs MFS).
-- Diagnostics now report the combined `ims_incidents` source URL and per-agency counts from a single upstream request.
-
-### Fixed
-
-- CFS current incidents no longer depend on the legacy CRIIMSON JSON endpoint that currently returns an HTML “File Unavailable” page.
+- Migrated CFS and MFS incident ingestion to the combined public IMS feed used by the official CFS map.
+- Restored CFS incident ingestion after legacy CRIIMSON feed availability changed.
+- CFS and MFS are now classified from a single upstream incident feed.
+- Preserved all existing Home Assistant entities and configuration options.
+- Updated diagnostics and documentation for the new source architecture.
 
 ## [0.6.0] - Unreleased
 
@@ -73,6 +69,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Initial Home Assistant integration scaffold, config flow, coordinator skeleton, and test/CI foundation.
 
+[0.6.1]: https://github.com/Bobson854/homeassistant-sa-emergency/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/Bobson854/homeassistant-sa-emergency/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Bobson854/homeassistant-sa-emergency/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Bobson854/homeassistant-sa-emergency/compare/v0.3.0...v0.4.0

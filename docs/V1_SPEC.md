@@ -62,7 +62,7 @@ This document describes the **planned V1 architecture and behaviour**. Implement
 * Options are stored in `entry.options` and applied via `OptionsFlowWithReload` without an additional config-entry update listener.
 * Disabled sources use `source_status = disabled` and are not treated as degraded availability.
 * Agency count sensors (`CFS incidents`, `MFS incidents`) report relevant incidents only via `cfs_relevant_incidents` / `mfs_relevant_incidents`, not statewide normalized totals.
-* When an enabled agency source fails, its count sensor state is unknown (`None`) while `source_status = error` remains visible in attributes.
+* As of **0.6.1**, CFS and MFS share one IMS upstream request. If that request fails, the coordinator refresh fails (including first setup). Per-agency `source_status = error` from separate HTTP failures is no longer the normal model; disabled agencies still use `disabled`.
 * When an agency is disabled through options, its sensor remains registered with unknown state and `enabled = false`.
 * Public incident attributes omit unavailable fields rather than fabricating placeholder values. Internal field names are mapped to the stable public schema (`type`, `location`, `bearing`, `aircraft`).
 * The temporary `sensor.sa_emergency_status` development entity has been removed.
@@ -74,6 +74,18 @@ This document describes the **planned V1 architecture and behaviour**. Implement
 * Custom-integration localization uses `translations/en.json` directly; Core `strings.json` generation is not required.
 * HACS custom-repository trial installation is supported after a real GitHub Release is published.
 * Default HACS catalogue inclusion requires additional external steps such as Home Assistant Brands registration and a `hacs/default` submission PR.
+
+### 0.6.1 implementation notes (combined IMS feed)
+
+* **Production path:** one ArcGIS FeatureServer query → attribute records → `normalize_ims_incident()` → split/filter by `authority` and options.
+* **Endpoint:** `https://cfs-feeds.geohub.sa.gov.au/FL/IMS_Read/SACFS_and_SAMFS_Incidents_and_Incident_Updates/FeatureServer/1/query` with `where=1=1`, `outFields=*`, `returnGeometry=false`, `f=json`.
+* **Authority → agency:** `South Australian Country Fire Service` → CFS; `South Australian Metropolitan Fire Service` → MFS (case-insensitive). Unknown authorities are skipped.
+* **`Incident.source` (production):** `ims_current_incidents`.
+* **`incident_id`:** `CFS:{ident}` or `MFS:{ident}` (not ArcGIS `objectid`).
+* **Field mapping (IMS → model):** `event` → type; `inc_status` → status; `inc_level` → level (string); `effective` → `sent` → `updated` (epoch ms → timezone-aware datetime); `location` / `inc_name` → location; `lat`/`long` → coordinates; `fbd` → fire_ban_district; message preference `incs` → `headline` → `title` → `instruct`; `web` → message_url; `region`, `resources`, `aircraft_count` → `None` until confirmed equivalents exist.
+* **Failure domain:** one upstream success/failure state; IMS failure → `UpdateFailed` (no silent zero incidents). No automatic fallback to legacy CRIIMSON JSON.
+* **Diagnostics:** `sources.ims_incidents` includes URL, status, counts, `cfs_count`, `mfs_count`; per-agency `cfs`/`mfs` blocks retained for sensor compatibility.
+* **Legacy:** `normalize_cfs_incident()` / `normalize_mfs_incident()` retained for regression tests only (historical CFS JSON and separate MFS FeatureServer shapes).
 
 The core V1 objective remains:
 
@@ -105,8 +117,8 @@ The authoritative government services remain the source of truth.
 
 V1 includes:
 
-1. CFS current incident polling.
-2. MFS current incident polling.
+1. Combined IMS current incident polling (CFS + MFS).
+2. Per-agency filtering via options (single upstream request).
 3. Common normalized incident model.
 4. Distance from Home Assistant location.
 5. Bearing from Home Assistant location.
@@ -284,19 +296,21 @@ without breaking existing consumers.
 
 The source incident identifier should be preserved.
 
-Suggested normalized identifier:
+Production (0.6.1+, IMS):
 
 ```text
-CFS:<IncidentNo>
-MFS:<id>
+CFS:<ident>
+MFS:<ident>
 ```
 
 Examples:
 
 ```text
-CFS:123456
-MFS:654321
+CFS:F2610030053
+MFS:F2608270132
 ```
+
+Legacy parsers (tests only) used CFS `<IncidentNo>` and MFS numeric `id` with the same prefix pattern.
 
 This prevents accidental collisions between agency numbering schemes.
 
@@ -781,14 +795,36 @@ This makes the attribute immediately useful to dashboards without requiring ever
 
 # 18. Source-Specific Normalization
 
-## CFS
+## IMS current incidents (production, 0.6.1+)
 
-Map source values into common fields.
-
-Examples:
+Combined CFS and MFS records from the official-map public feed. Classify agency from `authority`, then map:
 
 ```text
-IncidentNo      → incident_id
+ident (+ agency prefix)     → incident_id
+authority                   → agency (CFS / MFS)
+event                       → incident_type
+inc_status                  → status
+inc_level                   → level (string)
+effective / sent / updated  → first_reported (epoch ms)
+location / inc_name         → location_name
+lat / long                  → latitude / longitude
+fbd                         → fire_ban_district
+incs / headline / title / instruct → message (preference order)
+web                         → message_url
+(source constant)           → source = ims_current_incidents
+region                      → None (unmapped)
+resources                   → None (unmapped)
+aircraft_count              → None (unmapped)
+```
+
+Malformed coordinates or unknown authority: skip or retain non-spatial without failing the entire refresh.
+
+## Legacy CFS JSON (internal / tests only)
+
+Historical mapping retained for regression tests — **not** production after 0.6.1:
+
+```text
+IncidentNo      → incident_id (CFS: prefix)
 Type            → incident_type
 Status          → status
 Level           → level
@@ -799,33 +835,24 @@ Resources       → resources
 Aircraft        → aircraft_count
 Message         → message
 Message_link    → message_url
-Location        → latitude / longitude
+Location        → latitude / longitude (comma-separated)
 ```
 
-Date and Time should be combined into a timezone-aware `first_reported` value where reliably possible.
+## Legacy MFS FeatureServer (internal / tests only)
 
-Malformed coordinates should cause the specific incident to be rejected or marked non-spatial rather than crashing the coordinator.
-
-## MFS
-
-Map:
+Historical separate MFS layer — **not** production after 0.6.1:
 
 ```text
-id              → incident_id
+id              → incident_id (MFS: prefix)
 event           → incident_type
 status          → status
-name /
-incident_name   → location_name / description as appropriate
+name / incident_name → location_name / message
 first_report    → first_reported
 region          → region
-aircraft        → aircraft_count
-lat             → latitude
-long            → longitude
+lat / long      → latitude / longitude
 ```
 
-Fields unavailable from MFS should remain `None`.
-
-Do not fabricate equivalent values.
+Do not fabricate equivalent values when upstream fields are absent.
 
 ---
 
@@ -927,7 +954,7 @@ Include:
 * enabled agencies;
 * number of source incidents;
 * number of relevant incidents;
-* source request status;
+* IMS source request status (`sources.ims_incidents`) and per-agency counts;
 * last successful update;
 * parsing/error summaries.
 
@@ -957,13 +984,13 @@ Suggested levels:
 
 `WARNING`
 
-* individual source unavailable;
+* IMS upstream unavailable;
 * malformed source response;
 * repeated parsing issue.
 
 `ERROR`
 
-* integration unable to obtain usable information from all configured sources for a sustained period.
+* integration unable to obtain usable incident data from the IMS feed for a sustained period.
 
 ---
 
@@ -1180,17 +1207,14 @@ Include a clear disclaimer that emergency-service information in Home Assistant 
 * HACS metadata;
 * tests running.
 
-## Milestone 2 — CFS
+## Milestone 2 — CFS (superseded for production by 0.6.1 IMS)
 
-* fetch CFS feed;
-* normalize incidents;
-* unit tests.
+* legacy CFS JSON fetch and normalize (retained in tests).
 
-## Milestone 3 — MFS
+## Milestone 3 — MFS (superseded for production by 0.6.1 IMS)
 
-* fetch MFS ArcGIS feed;
-* normalize incidents;
-* combine both sources.
+* legacy separate MFS ArcGIS fetch and normalize (retained in tests).
+* production now uses combined IMS feed with authority-based agency split.
 
 ## Milestone 4 — Geography
 
