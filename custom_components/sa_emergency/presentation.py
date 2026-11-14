@@ -45,13 +45,33 @@ def incident_to_public_dict(incident: Incident) -> dict[str, Any]:
 
 
 def incident_geolocation_name(incident: Incident) -> str:
-    """Return a concise human-readable geolocation entity name."""
-    parts: list[str] = [incident.agency]
-    if incident.incident_type:
-        parts.append(incident.incident_type)
-    if incident.location_name:
-        parts.append(incident.location_name)
-    return " — ".join(parts)
+    """Return a map-marker name with incident type first for compact map labels."""
+    incident_type = _optional_str(incident.incident_type)
+    location_name = _optional_str(incident.location_name)
+    agency = _optional_str(incident.agency)
+
+    label_parts: list[str] = []
+    if incident_type is not None:
+        label_parts.append(incident_type)
+    if location_name is not None:
+        label_parts.append(location_name)
+
+    label = " — ".join(label_parts) if label_parts else incident.incident_id
+
+    if agency is not None:
+        return f"{label} ({agency})"
+    return label
+
+
+def _optional_str(value: Any) -> str | None:
+    """Return a non-empty stripped string, or None."""
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, str):
+        stripped = value.strip()
+        return stripped or None
+    stripped = str(value).strip()
+    return stripped or None
 
 
 def incident_to_geolocation_attributes(incident: Incident) -> dict[str, Any]:

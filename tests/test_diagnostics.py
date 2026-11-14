@@ -82,7 +82,7 @@ async def test_diagnostics_normal_data(hass: HomeAssistant, monkeypatch) -> None
 
     diagnostics = await async_get_config_entry_diagnostics(hass, entry)
 
-    assert diagnostics["integration"]["version"] == "0.6.2"
+    assert diagnostics["integration"]["version"] == "0.6.3"
     assert diagnostics["options"]["local_radius_km"] == 25.0
     assert diagnostics["sources"]["ims_incidents"]["status"] == "ok"
     assert diagnostics["sources"]["ims_incidents"]["url"] == IMS_INCIDENTS_URL
@@ -230,7 +230,7 @@ def test_build_diagnostics_payload_excludes_raw_incidents() -> None:
         )
 
     payload = _build_diagnostics_payload(
-        integration_version="0.6.2",
+        integration_version="0.6.3",
         coordinator=_CoordinatorStub(),  # type: ignore[arg-type]
     )
 

@@ -9,5 +9,5 @@
   "issue_tracker": "https://github.com/Bobson854/homeassistant-sa-emergency/issues",
   "requirements": [],
   "single_config_entry": true,
-  "version": "0.6.2"
+  "version": "0.6.3"
 }

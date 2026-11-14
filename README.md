@@ -1,6 +1,6 @@
 # SA Emergency
 
-**V1 preview — early public testing** (version `0.6.2`)
+**V1 preview — early public testing** (version `0.6.3`)
 
 SA Emergency is a [Home Assistant](https://www.home-assistant.io/) custom integration for location-aware **CFS** and **MFS** incident information across South Australia. It periodically refreshes current incidents from public feeds, compares them with your Home Assistant home location, and exposes counts and structured details as sensors for dashboards, templates, notifications, and automations.
 
@@ -12,6 +12,7 @@ This is an **independent community project**. It is **not** an official CFS or M
 - Uses your **Home Assistant configured latitude/longitude** locally for distance, bearing, and relevance — coordinates are **not** sent to the upstream feed.
 - Classifies incidents as **local**, **regional**, or outside your configured radii.
 - Exposes **seven stable sensors** plus normalized incident attributes on the primary Incidents sensor.
+- Adds native Home Assistant Map-card markers for current relevant incidents with coordinates.
 - Runs entirely inside Home Assistant — **no** external database or companion service required.
 
 **Not in V1:** CFS public warnings, warning polygons, paging/scanner feeds, incident history, or dedicated aircraft tracking.

@@ -278,14 +278,50 @@ def test_marker_incidents_filters_coordinates() -> None:
     assert _marker_incidents(_CoordinatorStub()) == [local]  # type: ignore[arg-type]
 
 
-def test_incident_geolocation_name_omits_missing_parts() -> None:
-    """Geolocation names omit unavailable type/location segments."""
+def test_incident_geolocation_name_type_location_agency() -> None:
+    """Geolocation names lead with type, then location, then agency in parentheses."""
     assert (
         incident_geolocation_name(
             _incident("CFS:X", lat=1.0, lon=2.0, relevance=RELEVANCE_LOCAL)
         )
-        == "CFS — Burn Off — WOODSIDE"
+        == "Burn Off — WOODSIDE (CFS)"
     )
+
+
+def test_incident_geolocation_name_long_location() -> None:
+    """Long location labels are preserved after the incident type."""
+    incident = _incident("CFS:X", lat=1.0, lon=2.0)
+    incident.location_name = "GERANIUM NORTH, GERANIUM"
+    incident.incident_type = "Structure Fire"
+    assert (
+        incident_geolocation_name(incident)
+        == "Structure Fire — GERANIUM NORTH, GERANIUM (CFS)"
+    )
+
+
+def test_incident_geolocation_name_type_only() -> None:
+    """Type and agency without location omit the middle segment."""
+    incident = _incident("MFS:X", lat=1.0, lon=2.0)
+    incident.agency = "MFS"
+    incident.incident_type = "Fire Alarm"
+    incident.location_name = None
+    assert incident_geolocation_name(incident) == "Fire Alarm (MFS)"
+
+
+def test_incident_geolocation_name_location_only() -> None:
+    """Location and agency without type omit the type segment."""
+    incident = _incident("CFS:X", lat=1.0, lon=2.0)
+    incident.incident_type = None
+    incident.location_name = "WOODSIDE"
+    assert incident_geolocation_name(incident) == "WOODSIDE (CFS)"
+
+
+def test_incident_geolocation_name_fallback_to_incident_id() -> None:
+    """Missing type and location fall back to incident_id plus agency."""
+    incident = _incident("CFS:F2610030053", lat=1.0, lon=2.0)
+    incident.incident_type = None
+    incident.location_name = None
+    assert incident_geolocation_name(incident) == "CFS:F2610030053 (CFS)"
 
 
 async def test_manager_sync_removes_stale_entity(hass: HomeAssistant) -> None:
