@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.2] - Unreleased
+
+- Added native Home Assistant `geo_location` map markers for current geographically relevant incidents (no warning polygons).
+- Map markers share the existing IMS coordinator refresh; sensors and options unchanged.
+
 ## [0.6.1] - Unreleased
 
 - Migrated CFS and MFS incident ingestion to the combined public IMS feed used by the official CFS map.
@@ -69,6 +74,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Initial Home Assistant integration scaffold, config flow, coordinator skeleton, and test/CI foundation.
 
+[0.6.2]: https://github.com/Bobson854/homeassistant-sa-emergency/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/Bobson854/homeassistant-sa-emergency/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/Bobson854/homeassistant-sa-emergency/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Bobson854/homeassistant-sa-emergency/compare/v0.4.0...v0.5.0

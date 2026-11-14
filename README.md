@@ -1,6 +1,6 @@
 # SA Emergency
 
-**V1 preview — early public testing** (version `0.6.1`)
+**V1 preview — early public testing** (version `0.6.2`)
 
 SA Emergency is a [Home Assistant](https://www.home-assistant.io/) custom integration for location-aware **CFS** and **MFS** incident information across South Australia. It periodically refreshes current incidents from public feeds, compares them with your Home Assistant home location, and exposes counts and structured details as sensors for dashboards, templates, notifications, and automations.
 
@@ -84,6 +84,24 @@ All setup is through the Home Assistant UI.
 | `sensor.sa_emergency_mfs_incidents` | Count of **relevant** MFS incidents |
 
 Count sensors reflect **geographically relevant** incidents, not every incident statewide.
+
+Additionally, each **current relevant incident with valid coordinates** appears as a temporary `geo_location` entity (source `sa_emergency`) for the Home Assistant Map card. These are point markers only — not official warning polygons.
+
+### Map card
+
+Relevant incidents with coordinates are exposed automatically after each normal refresh. Example dashboard:
+
+```yaml
+type: map
+title: SA Emergency incidents
+geo_location_sources:
+  - sa_emergency
+auto_fit: true
+cluster: false
+default_zoom: 9
+```
+
+Markers follow the same local/regional relevance rules as the sensors. Incidents outside your configured regional radius or without coordinates are not shown on the map.
 
 When more than **50** relevant incidents exist, the primary sensor state still shows the full count, but the `incidents` attribute list is capped at 50 (sorted) and `incidents_truncated` is `true`.
 

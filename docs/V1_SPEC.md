@@ -24,6 +24,7 @@ This document describes the **planned V1 architecture and behaviour**. Implement
 | Structured relevant incident attributes | Implemented (Milestone 5) |
 | Diagnostics | Implemented (Milestone 6) |
 | HACS custom-repository release readiness | Implemented (Milestone 6) |
+| Native incident `geo_location` map markers (relevant incidents, point only) | Implemented (0.6.2) |
 | CFS public warnings | Not implemented |
 | Default HACS catalogue submission | Not yet submitted |
 
@@ -86,6 +87,13 @@ This document describes the **planned V1 architecture and behaviour**. Implement
 * **Failure domain:** one upstream success/failure state; IMS failure → `UpdateFailed` (no silent zero incidents). No automatic fallback to legacy CRIIMSON JSON.
 * **Diagnostics:** `sources.ims_incidents` includes URL, status, counts, `cfs_count`, `mfs_count`; per-agency `cfs`/`mfs` blocks retained for sensor compatibility.
 * **Legacy:** `normalize_cfs_incident()` / `normalize_mfs_incident()` retained for regression tests only (historical CFS JSON and separate MFS FeatureServer shapes).
+
+### 0.6.2 implementation notes (map markers)
+
+* **`Platform.GEO_LOCATION`** forwards one `GeolocationEvent` per qualifying incident from `incidents_relevant` with valid `latitude`/`longitude`.
+* **Source** attribute is exactly `sa_emergency`; entities are not attached to the SA Emergency device.
+* **Lifecycle:** coordinator listener adds, updates, and `force_remove`s markers when relevance or feed data changes; no separate network request.
+* **Not implemented:** warning polygons, custom Lovelace cards, or map geometry beyond point markers.
 
 The core V1 objective remains:
 
